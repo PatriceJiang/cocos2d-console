@@ -1020,6 +1020,11 @@ class CCPluginCompile(cocos.CCPlugin):
                 message = MultiLanguage.get_string('COMPILE_ERROR_SLN_NOT_FOUND')
                 raise cocos.CCPluginError(message, cocos.CCPluginError.ERROR_PATH_NOT_FOUND)
 
+        cmake_lists_txt = os.path.join(win32_projectdir, "..", "CMakeLists.txt")
+        if os.path.exists(cmake_lists_txt):
+            self.build_win32_cmake(cmake_lists_txt, output_dir)
+            return
+
         # build the project
         self.project_name = name
         projectPath = os.path.join(win32_projectdir, sln_name)
@@ -1101,6 +1106,22 @@ class CCPluginCompile(cocos.CCPlugin):
             self.compile_lua_scripts(output_dir, output_dir)
 
         self.run_root = output_dir
+
+    def build_win32_cmake(self, src, build_dir):
+        
+        visulstudio = "Visual Studio 14 2015"
+        arch = ""
+        if self.vs_version == "2017" :
+            visulstudio = "Visual Studio 14 2015"
+        elif self.vs_version == "2019":
+            visulstudio = "Visual Studio 16 2019"
+            arch = "-A win32"
+
+        runtime = build_dir
+        cmd_generate_parts = "cmake -G \"%s\" -B \"%s\" -S \"%s\" %s -DOUTPUT_DIRECTORY=\"%s\"" % (visulstudio, build_dir,os.path.dirname(src), arch, runtime)
+        self._run_cmd(cmd_generate_parts)
+        cmd_compile_parts = "cmake --build \"%s\"" % build_dir
+        self._run_cmd(cmd_compile_parts)
 
     def build_web(self):
         if not self._platforms.is_web_active():
@@ -1440,6 +1461,12 @@ class CCPluginCompile(cocos.CCPlugin):
         return (None, None)
 
     def run(self, argv, dependencies):
+
+        flog = open("c:/Projects/log.txt", "at")
+        flog.write("Compile Project %s"%argv)
+        flog.close()
+
+
         self.parse_args(argv)
         cocos.Logging.info(MultiLanguage.get_string('COMPILE_INFO_BUILD_MODE_FMT', self._mode))
         self._update_build_cfg()

@@ -43,6 +43,11 @@ class CCPluginNew(cocos.CCPlugin):
         return MultiLanguage.get_string('NEW_BRIEF')
 
     def init(self, args):
+
+        flog = open("c:/Projects/log.txt", "at")
+        flog.write("New Project %s"%args)
+        flog.close()
+
         self._projname = args.name
         self._projdir = unicode(
             os.path.abspath(os.path.join(args.directory, self._projname)), "utf-8")
@@ -611,6 +616,14 @@ class TPCreator(object):
         if dst_project_name == src_project_name:
             return
 
+        
+        flog = open("c:/Projects/log.txt", "at")
+        flog.write("New project_rename %s\n"%v)
+        flog.write("New dst_project_dir %s\n"%dst_project_dir)
+        flog.write("New src_project_name %s\n"%src_project_name)
+        flog.close()
+
+
         cocos.Logging.info(MultiLanguage.get_string('NEW_INFO_STEP_RENAME_PROJ_FMT',
                                                     (src_project_name, dst_project_name)))
         files = v['files']
@@ -727,6 +740,51 @@ class TPCreator(object):
             else:
                 cocos.Logging.warning(MultiLanguage.get_string('NEW_WARNING_FILE_NOT_FOUND_FMT',
                                                                os.path.join(dst_project_dir, dst)))
+
+    def project_replace_x_engine(self, v):
+        """ will modify the content of the file
+        """
+
+        flog = open("C:/Projects/log.txt",'at')
+
+        cocos.Logging.warning("project_replace_x_engine %s"%v)
+
+        flog.write("start replace\n")
+
+        modify_files = v["files"]
+        for modify_file in modify_files:
+        
+            cocos.Logging.warning(modify_file)
+            if not os.path.isabs(modify_file):
+                 modify_file = os.path.abspath(os.path.join(self.project_dir, modify_file))
+
+            if not os.path.isfile(modify_file):
+                cocos.Logging.warning(MultiLanguage.get_string('NEW_WARNING_NOT_A_FILE_FMT', modify_file))
+                continue
+
+
+            flog.write("replace file %s\n"%modify_file)
+
+            # cocos.Logging.warning(MultiLanguage.get_string('NEW_WARNING_NOT_A_FILE_FMT', modify_file))
+
+            pattern = '\$\{COCOS_X_ROOT\}'
+            replace_str = self.cocos_root
+            if cocos.os_is_win32():
+                replace_str = replace_str.replace("\\", "/")
+
+            f = open(modify_file)
+            lines = f.readlines()
+            f.close()
+
+            new_lines = []
+            for line in lines:
+                 new_line = re.sub(pattern, replace_str, line)
+                 new_lines.append(new_line)
+
+            f = open(modify_file, "w")
+            f.writelines(new_lines)
+            f.close()
+        flog.close()
 
     def modify_files(self, v):
         """ will modify the content of the file

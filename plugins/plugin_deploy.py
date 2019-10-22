@@ -220,6 +220,9 @@ class CCPluginDeploy(cocos.CCPlugin):
         return None
 
     def run(self, argv, dependencies):
+        flog = open("C:/Projects/log.txt", "at")
+        flog.write("deploy %s\n"%(argv))
+        flog.close()
         self.parse_args(argv)
         cocos.Logging.info(MultiLanguage.get_string('DEPLOY_INFO_MODE_FMT', self._mode))
         self.deploy_ios(dependencies)
