@@ -736,6 +736,11 @@ class CCPluginCompile(cocos.CCPlugin):
         mac_project_dir = self._platforms.project_path()
         output_dir = self._output_dir
 
+        cmake_lists_txt = os.path.join(mac_project_dir, "..", "CMakeLists.txt")
+        if os.path.exists(cmake_lists_txt):
+            self.build_mac_cmake(cmake_lists_txt, output_dir)
+            return
+
         projectPath = os.path.join(mac_project_dir, self.xcodeproj_name)
         pbxprojectPath = os.path.join(projectPath, "project.pbxproj")
 
@@ -850,6 +855,13 @@ class CCPluginCompile(cocos.CCPlugin):
                     engine_js_dir = self.get_engine_js_dir()
                     if engine_js_dir is not None:
                         self.reset_backup_dir(engine_js_dir)
+
+    def build_mac_cmake(self, src, build_dir) :
+        src_dir = os.path.dirname(src)
+        cmd_generate_parts = "cmake -G Xcode -B \"%s\" -S \"%s\" -DOUTPUT_DIRECTORY=\"%s\"" % (build_dir, src_dir, build_dir)
+        self._run_cmd(cmd_generate_parts)
+        cmd_compile_parts = "cmake --build \"%s\"" % (build_dir)
+        self._run_cmd(cmd_compile_parts)
 
     # Get the required VS versions from the engine version of project
     def get_required_vs_versions(self):
@@ -1461,11 +1473,6 @@ class CCPluginCompile(cocos.CCPlugin):
         return (None, None)
 
     def run(self, argv, dependencies):
-
-        flog = open("c:/Projects/log.txt", "at")
-        flog.write("Compile Project %s"%argv)
-        flog.close()
-
 
         self.parse_args(argv)
         cocos.Logging.info(MultiLanguage.get_string('COMPILE_INFO_BUILD_MODE_FMT', self._mode))

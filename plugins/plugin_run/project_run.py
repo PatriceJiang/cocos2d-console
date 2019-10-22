@@ -340,9 +340,6 @@ class CCPluginRun(cocos.CCPlugin):
 
 
     def run(self, argv, dependencies):
-        flog = open("C:/Projects/log.txt", "at")
-        flog.write("run %s\n"%(argv))
-        flog.close()
         self.parse_args(argv)
         cocos.Logging.info(MultiLanguage.get_string('RUN_INFO_START_APP'))
         self.run_android_device(dependencies)
