@@ -668,26 +668,30 @@ class CCPluginCompile(cocos.CCPlugin):
             if self._xcworkspace:
                 p_name, p_project_name = self.checkFileByExtention(".xcworkspace", self._platforms.project_path())
                 projectPath = os.path.join(ios_project_dir, p_project_name)
+            
+            cmake_lists_txt = os.path.join(ios_project_dir, "..", "CMakeLists.txt")
+            if os.path.exists(cmake_lists_txt):
+                self.build_ios_cmake(cmake_lists_txt, output_dir, self._sign_id, self.use_sdk)
+            else:
+                command = ' '.join([
+                    "xcodebuild",
+                    "%s" % '-workspace' if self._xcworkspace else '-project',
+                    "\"%s\"" % projectPath,
+                    "-configuration",
+                    "%s" % 'Debug' if self._mode == 'debug' else 'Release',
+                    "%s" % '-scheme' if self._xcworkspace else '-target',
+                    "\"%s\"" % targetName,
+                    "%s" % "-arch x86_64" if self.use_sdk == 'iphonesimulator' else '',
+                    "-sdk",
+                    "%s" % self.use_sdk,
+                    "CONFIGURATION_BUILD_DIR=\"%s\"" % (output_dir),
+                    "%s" % "VALID_ARCHS=\"i386 x86_64\"" if self.use_sdk == 'iphonesimulator' else ''
+                    ])
 
-            command = ' '.join([
-                "xcodebuild",
-                "%s" % '-workspace' if self._xcworkspace else '-project',
-                "\"%s\"" % projectPath,
-                "-configuration",
-                "%s" % 'Debug' if self._mode == 'debug' else 'Release',
-                "%s" % '-scheme' if self._xcworkspace else '-target',
-                "\"%s\"" % targetName,
-                "%s" % "-arch x86_64" if self.use_sdk == 'iphonesimulator' else '',
-                "-sdk",
-                "%s" % self.use_sdk,
-                "CONFIGURATION_BUILD_DIR=\"%s\"" % (output_dir),
-                "%s" % "VALID_ARCHS=\"i386 x86_64\"" if self.use_sdk == 'iphonesimulator' else ''
-                ])
+                if self._sign_id is not None:
+                    command = "%s CODE_SIGN_IDENTITY=\"%s\"" % (command, self._sign_id)
 
-            if self._sign_id is not None:
-                command = "%s CODE_SIGN_IDENTITY=\"%s\"" % (command, self._sign_id)
-
-            self._run_cmd(command)
+                self._run_cmd(command)
 
             filelist = os.listdir(output_dir)
 
@@ -735,11 +739,6 @@ class CCPluginCompile(cocos.CCPlugin):
 
         mac_project_dir = self._platforms.project_path()
         output_dir = self._output_dir
-
-        cmake_lists_txt = os.path.join(mac_project_dir, "..", "CMakeLists.txt")
-        if os.path.exists(cmake_lists_txt):
-            self.build_mac_cmake(cmake_lists_txt, output_dir)
-            return
 
         projectPath = os.path.join(mac_project_dir, self.xcodeproj_name)
         pbxprojectPath = os.path.join(projectPath, "project.pbxproj")
@@ -815,18 +814,21 @@ class CCPluginCompile(cocos.CCPlugin):
                 p_name, p_project_name = self.checkFileByExtention(".xcworkspace", self._platforms.project_path())
                 projectPath = os.path.join(mac_project_dir, p_project_name)
 
-            command = ' '.join([
-                "xcodebuild",
-                "%s" % '-workspace' if self._xcworkspace else '-project',
-                "\"%s\"" % projectPath,
-                "-configuration",
-                "%s" % 'Debug' if self._mode == 'debug' else 'Release',
-                "%s" % '-scheme' if self._xcworkspace else '-target',
-                "\"%s\"" % targetName,
-                "CONFIGURATION_BUILD_DIR=\"%s\"" % (output_dir)
-                ])
-
-            self._run_cmd(command)
+            cmake_lists_txt = os.path.join(mac_project_dir, "..", "CMakeLists.txt")
+            if os.path.exists(cmake_lists_txt):
+                self.build_mac_cmake(cmake_lists_txt, output_dir)
+            else:
+                command = ' '.join([
+                    "xcodebuild",
+                    "%s" % '-workspace' if self._xcworkspace else '-project',
+                    "\"%s\"" % projectPath,
+                    "-configuration",
+                    "%s" % 'Debug' if self._mode == 'debug' else 'Release',
+                    "%s" % '-scheme' if self._xcworkspace else '-target',
+                    "\"%s\"" % targetName,
+                    "CONFIGURATION_BUILD_DIR=\"%s\"" % (output_dir)
+                    ])
+                self._run_cmd(command)
 
             self.target_name = targetName
             filelist = os.listdir(output_dir)
@@ -859,6 +861,19 @@ class CCPluginCompile(cocos.CCPlugin):
     def build_mac_cmake(self, src, build_dir) :
         src_dir = os.path.dirname(src)
         cmd_generate_parts = "cmake -G Xcode -B \"%s\" -S \"%s\" -DOUTPUT_DIRECTORY=\"%s\"" % (build_dir, src_dir, build_dir)
+        self._run_cmd(cmd_generate_parts)
+        cmd_compile_parts = "cmake --build \"%s\"" % (build_dir)
+        self._run_cmd(cmd_compile_parts)
+
+    def build_ios_cmake(self, src, build_dir, sign_id, sdk) :
+        src_dir = os.path.dirname(src)
+        sysname = "iOS"
+        sysroot = "iphoneos"
+        if sdk == "iphonesimulator":
+            sysroot = sdk
+        cmd_generate_parts = "cmake -G Xcode -B \"%s\" -S \"%s\" -DCMAKE_SYSTEM_NAME=%s -DCMAKE_OSX_SYSROOT=%s -DOUTPUT_DIRECTORY=\"%s\"" % (build_dir, src_dir, sysname, sysroot, build_dir)
+        if sign_id is not None:
+            cmd_generate_parts = "%s -DCODE_SIGN_IDENTITY=%s"%(cmd_compile_parts, sign_id)
         self._run_cmd(cmd_generate_parts)
         cmd_compile_parts = "cmake --build \"%s\"" % (build_dir)
         self._run_cmd(cmd_compile_parts)
