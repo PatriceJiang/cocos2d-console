@@ -1049,8 +1049,8 @@ class CCPluginCompile(cocos.CCPlugin):
 
         cmake_lists_txt = os.path.join(win32_projectdir, "..", "CMakeLists.txt")
         if os.path.exists(cmake_lists_txt):
-            self.build_win32_cmake(cmake_lists_txt, output_dir)
-            return
+           self.build_win32_cmake(cmake_lists_txt, output_dir, self._is_debug_mode())
+           return
 
         # build the project
         self.project_name = name
@@ -1134,20 +1134,15 @@ class CCPluginCompile(cocos.CCPlugin):
 
         self.run_root = output_dir
 
-    def build_win32_cmake(self, src, build_dir):
-        
-        visulstudio = "Visual Studio 14 2015"
-        arch = ""
-        if self.vs_version == "2017" :
-            visulstudio = "Visual Studio 14 2015"
-        elif self.vs_version == "2019":
-            visulstudio = "Visual Studio 16 2019"
-            arch = "-A win32"
-
+    def build_win32_cmake(self, src, build_dir, is_debug):
+        arch = "-A win32"
         runtime = build_dir
-        cmd_generate_parts = "cmake -G \"%s\" -B \"%s\" -S \"%s\" %s -DOUTPUT_DIRECTORY=\"%s\"" % (visulstudio, build_dir,os.path.dirname(src), arch, runtime)
+        mode = "Release"
+        if is_debug :
+            mode = "Debug"
+        cmd_generate_parts = "cmake -B \"%s\" -S \"%s\" %s -DOUTPUT_DIRECTORY=\"%s\"" % (build_dir,os.path.dirname(src), arch, runtime)
         self._run_cmd(cmd_generate_parts)
-        cmd_compile_parts = "cmake --build \"%s\"" % build_dir
+        cmd_compile_parts = "cmake --build \"%s\" --config %s" % (build_dir, mode)
         self._run_cmd(cmd_compile_parts)
 
     def build_web(self):
