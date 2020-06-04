@@ -1,0 +1,7 @@
+{
+    "languages":["js"],
+    "platforms":["ios","mac","win32","android"],
+    "default":{
+        "project_name":"MyGame"
+    }
+}
