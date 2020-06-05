@@ -65,7 +65,7 @@ export class CCPluginCOMPILE extends CCPlugin {
 
     async run_cmake(args:string[]) {
         return new Promise((resolve, reject)=>{
-            let cp = child_process.spawn("/usr/local/bin/cmake", args, {
+            let cp = child_process.spawn("cmake", args, {
                 stdio:["pipe","pipe","pipe"],
                 env: process.env,
                 shell: true

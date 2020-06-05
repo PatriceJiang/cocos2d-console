@@ -70,7 +70,7 @@ class CCPluginCOMPILE extends cocos_cli_1.CCPlugin {
     run_cmake(args) {
         return __awaiter(this, void 0, void 0, function* () {
             return new Promise((resolve, reject) => {
-                let cp = child_process.spawn("/usr/local/bin/cmake", args, {
+                let cp = child_process.spawn("cmake", args, {
                     stdio: ["pipe", "pipe", "pipe"],
                     env: process.env,
                     shell: true
