@@ -4,6 +4,17 @@ import * as fs from "fs";
 import * as path from "path";
 import * as ml from "./multi_language";
 import * as cocos_cfg from "./cocos_config.json";
+import * as os from "os";
+import {promisify} from "util";
+
+const afs = {
+    readFile: promisify(fs.readFile),
+    readdir: promisify(fs.readdir),
+    stat: promisify(fs.stat),
+    exists: promisify(fs.exists),
+    copyFile: promisify(fs.copyFile),
+    writeFile: promisify(fs.writeFile)
+};
 
 enum ArgumentItemType {
     BOOL_FLAG,
@@ -32,6 +43,7 @@ export const pa = {
     platform:{short:"-p", long:"--platform", help: ml.get_string("COCOS_HELP_ARG_PLATFORM"), arg_type:ArgumentItemType.ENUM, enum_values: cocos_cfg.platforms},
     do_list_platforms:{short:"", long:"--list-platforms", help: "list available platforms", arg_type:ArgumentItemType.ACTION},
     proj_dir: {short: "",long: "--proj-dir", help: ml.get_string("COCOS_HELP_ARG_PROJ_DIR"), arg_type: ArgumentItemType.STRING_VALUE},
+    build_dir: {short: "",long: "--build-dir", help: "specify directory where to build project", arg_type: ArgumentItemType.STRING_VALUE},
     package_name:{short: "-p", long: "--package", help:ml.get_string("NEW_ARG_PACKAGE"), arg_type: ArgumentItemType.STRING_VALUE},
     directory:{short:"-d", long:"--directory", help: ml.get_string("NEW_ARG_DIR"), arg_type: ArgumentItemType.STRING_VALUE},
     ios_bundleid:{short:"", long:"--ios-bundleid", help: ml.get_string("NEW_ARG_IOS_BUNDLEID"), arg_type: ArgumentItemType.STRING_VALUE},
@@ -296,6 +308,17 @@ export abstract class CCPlugin {
         return process.env[key]!;
     }
 
+    protected get_current_platform():string {
+        let p = os.platform();
+        if( p === "darwin") {
+            return "mac";
+        }else if(p == "win32") {
+            return "win32";
+        }
+        console.warn(`platform ${p} is not supported!`);
+        return p;
+    }
+
     parse_args() {
 
         let parser = this.parser;
@@ -340,6 +363,15 @@ export abstract class CCPlugin {
         return this.get_templates_dir_names().map(x=> path.join(template_dir!, x));
     }
 
+    get_platform():string {
+        let p = this.parser.get_string("platform");
+        if(!p) {
+            p = this.get_current_platform();
+            console.warn("platform not specified, use current platform ${p}");
+        }
+        return p;
+    }
+
     async exec() {
         this.parse_args();
         if(this.parser.call_all()) return;
@@ -349,6 +381,7 @@ export abstract class CCPlugin {
         console.log(`done!`);
     }
 
+
     get args(): ArgumentParser {
         return this.parser;
     }
@@ -356,7 +389,7 @@ export abstract class CCPlugin {
 
 export class CCHelper {
 
-    private static replace_env_variables(str:string):string {
+    static replace_env_variables(str:string):string {
         return str.replace(/\$\{([^\}]*)\}/g, (_, n)=> process.env[n]!).
             replace(/(\~)/g, (_, n)=> process.env["HOME"]!);
     }
@@ -373,59 +406,45 @@ export class CCHelper {
         fs.copyFileSync(src, dst);
     }
 
-    static copy_file_async(src:string, dst:string) {
+    static async copy_file_async(src:string, dst:string) {
         this.mkdir_p_sync(path.parse(dst).dir);
-        return new Promise<boolean>((resolve, reject)=>{
-            fs.copyFile(src, dst, (err)=>{
-                if(err) return reject(err);
-                resolve(true);
-            })
-        });
+        await afs.copyFile(src, dst);
     }
 
-    static copy_recursive_async(src_dir:string, dst:string) {
+    static async copy_recursive_async(src_dir:string, dst:string) {
         src_dir = this.replace_env_variables(src_dir);
         dst = this.replace_env_variables(dst);
-        return new Promise((resolve, reject)=>{
-            let tasks: Promise<any>[] = [];
-            fs.stat(src_dir, (err, stat)=>{
-                if(!stat) {
-                    console.error(`failed to stat ${src_dir}`);
-                    return resolve();
-                }
-                if(err) reject(err);
-                if(stat.isDirectory()) {
-                    this.mkdir_p_sync(dst);
-                    fs.readdir(src_dir, (err, files)=>{
-                        if(err) return reject(err);
-                        for(let f of files) {
-                            if(f == "." || f == "..") continue;
-                            let fp = path.join(src_dir, f);
-                            let tsk =this.copy_recursive_async(fp, path.join(dst, f));
-                            tasks.push(tsk);
-                        }
-                        Promise.all(tasks).then(resolve, reject);
-                    });
-                } else if(stat.isFile()) {
-                    this.copy_file_async(src_dir, dst).then(resolve, reject);
-                }
-            })
-            
-        });
+
+        let tasks: Promise<any>[] = [];
+        let stat = await afs.stat(src_dir);
+
+        if(!stat) {
+            console.error(`failed to stat ${src_dir}`);
+            return;
+        }
+        if(stat.isDirectory()) {
+            this.mkdir_p_sync(dst);
+            let files = await afs.readdir(src_dir);
+            for(let f of files) {
+                if(f == "." || f == "..") continue;
+                let fp = path.join(src_dir, f);
+                let tsk =this.copy_recursive_async(fp, path.join(dst, f));
+                tasks.push(tsk);
+            }
+            await Promise.all(tasks);
+        } else if(stat.isFile()) {
+            await this.copy_file_async(src_dir, dst);
+        }
     }
 
     static par_copy_files(par:number, src_root:string, files:string[], dst_dir:string) {
         let running_tasks  = 0;
-        //console.log(`par copy files ${par} ${src_root} to ${dst_dir}`)
         return new Promise((resolve, reject)=>{
-            let copy_async = (src:string, dst:string) => {
-                //console.log(`cp ${src} -> ${dst}`);
-                let dst_dir = path.parse(dst).dir;
+            let copy_async = async (src:string, dst:string) => {
                 running_tasks += 1;
-                this.copy_recursive_async(src, dst).then(()=>{
-                    running_tasks -= 1;
-                    schedule_copy();
-                }).catch((err)=>reject(err));
+                await this.copy_recursive_async(src, dst);
+                running_tasks -= 1;
+                schedule_copy();
             };
             let schedule_copy = ()=>{
                 if(files.length > 0 && running_tasks < par) {
@@ -507,44 +526,29 @@ export class CCHelper {
         let include_prefix = cfg.include ? build_prefix_tree(cfg.include) : null;
         let exclude_prefix = cfg.exclude ? build_prefix_tree(cfg.exclude) : null;
 
- 
-
-        let cp_r_async = (src_root:string, src_dir:string, dst_root:string) => {
-            return new Promise((resolve, reject)=>{
-                let curr_full_dir = path.join(src_root, src_dir);
-                fs.stat(curr_full_dir, (err, stat)=>{
-                    if(err) {
-                        return reject(err);
+        let cp_r_async = async (src_root:string, src_dir:string, dst_root:string) => {
+            let curr_full_dir = path.join(src_root, src_dir);
+            let stat = await afs.stat(curr_full_dir);
+            if(stat.isDirectory()) {
+                let files = await afs.readdir(curr_full_dir);
+                let subcopies:Promise<any>[] = [];
+                for(let f of files) {
+                    if(f == "."  || f == "..") continue;
+                    let path_in_src_root = path.join(src_dir, f);
+                    if(exclude_prefix && match_prefix_tree(path_in_src_root, exclude_prefix)) {
+                        if(include_prefix && match_prefix_tree(path_in_src_root, include_prefix)) {
+                            //include
+                        }else {
+                            console.log(` - skip copy ${src_root} ${path_in_src_root} to ${dst_root}`);
+                            continue;
+                        }
                     }
-                    if(stat.isDirectory()) {
-                        fs.readdir(curr_full_dir, (err, files)=>{
-                            if(err) {
-                                reject(err);
-                                return;
-                            }
-                            let subcopies:Promise<any>[] = [];
-                            for(let f of files) {
-                                if(f == "."  || f == "..") continue;
-                                let path_in_src_root = path.join(src_dir, f);
-                                if(exclude_prefix && match_prefix_tree(path_in_src_root, exclude_prefix)) {
-                                    if(include_prefix && match_prefix_tree(path_in_src_root, include_prefix)) {
-                                        //include
-                                    }else {
-                                        console.log(` - skip copy ${src_root} ${path_in_src_root} to ${dst_root}`);
-                                        continue;
-                                    }
-                                }
-                                subcopies.push(cp_r_async(src_root, path_in_src_root, dst_root));
-                            } 
-                            Promise.all(subcopies).then(resolve, reject);
-                        });
-                    } else if (stat.isFile()) {
-                        this.copy_file_async(curr_full_dir, path.join(dst_root, src_dir))
-                            .then(resolve, reject);
-                    }
-                });
-
-            })
+                    subcopies.push(cp_r_async(src_root, path_in_src_root, dst_root));
+                } 
+                await Promise.all(subcopies);
+            } else if (stat.isFile()) {
+                await this.copy_file_async(curr_full_dir, path.join(dst_root, src_dir));
+            }
         }
 
         return new Promise((resolve, reject)=>{
@@ -554,14 +558,14 @@ export class CCHelper {
         });
     }
 
-    static replace_in_file( patterns: {reg:string, text:string}[], filepath:string) {
+    static async replace_in_file( patterns: {reg:string, text:string}[], filepath:string) {
         filepath = this.replace_env_variables(filepath);
         if(!fs.existsSync(filepath)) {
             console.warn(`file ${filepath} not exists while replacing content!`);
             return;
         }
         // console.log(`replace ${filepath} with ${JSON.stringify(patterns)}`);
-        let lines = fs.readFileSync(filepath).toString("utf8").split("\n");
+        let lines = (await afs.readFile(filepath)).toString("utf8").split("\n");
 
         let new_content = lines.map(l => {
             patterns.forEach(p => {
@@ -570,7 +574,7 @@ export class CCHelper {
             return l;
         }).join("\n");
 
-        fs.writeFileSync(filepath,  new_content);
+        await afs.writeFile(filepath,  new_content);
     }
 }
 

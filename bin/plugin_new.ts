@@ -7,6 +7,7 @@ import * as cocos_cfg from "./cocos_config.json";
 import * as cocos_project from "./cocos_project_types";
 import * as cocos2dx_files from "../../../templates/cocos2dx_files.json";
 
+
 const PackageNewConfig = "cocos-project-template.json";
 
 export class CCPluginNEW extends CCPlugin {
@@ -21,7 +22,7 @@ export class CCPluginNEW extends CCPlugin {
         parser.add_predefined_argument("engine_path");
         parser.add_predefined_argument("portrait");
         parser.add_predefined_argument("no_native");
-        parser.add_required_predefined_argument("language");
+        parser.add_predefined_argument_with_default("language", "js");
         parser.add_predefined_argument("do_list_templates", this.do_list_templates.bind(this));
         parser.add_predefined_argument_with_default("template_name", "js-template-link");
     }
@@ -278,7 +279,7 @@ export class TemplateCreator {
 
         for(let fullpath in replace_files_delay) {
             let cfg = replace_files_delay[fullpath];
-            CCHelper.replace_in_file(cfg.map(x=>{
+            await CCHelper.replace_in_file(cfg.map(x=>{
                 return {reg: x.reg, text: x.content};
             }), fullpath);
         }
