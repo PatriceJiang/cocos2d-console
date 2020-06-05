@@ -464,6 +464,23 @@ export class CCHelper {
         }
     }
 
+    static async rm_r(dir:string) {
+        let stat = await afs.stat(dir);
+        if(stat.isFile()) {
+            await afs.unlink(dir);
+        }else if(stat.isDirectory()) {
+            let list = await afs.readdir(dir);
+            let tasks:Promise<any>[] = [];
+            for(let f of list) {
+                if(f == "." || f == ".." ) continue;
+                let fp = path.join(dir, f);
+                tasks.push(this.rm_r(fp));
+            }
+            await Promise.all(tasks);
+            await afs.rmdir(dir);
+        }
+    }
+
     static async copy_files_with_config(cfg:{from:string, to:string, include?:string[], exclude?:string[]}, src_root:string, dst_root:string) {
         
         if(!fs.existsSync(src_root)){

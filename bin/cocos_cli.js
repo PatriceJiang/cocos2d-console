@@ -9,7 +9,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CCHelper = exports.CCPlugin = exports.pa = void 0;
 const fs = require("fs");
 const path = require("path");
 const ml = require("./multi_language");
@@ -422,6 +421,26 @@ class CCHelper {
             fs.mkdirSync(dirs[dirs.length - 1]);
             dirs.length = dirs.length - 1;
         }
+    }
+    static rm_r(dir) {
+        return __awaiter(this, void 0, void 0, function* () {
+            let stat = yield afs_1.afs.stat(dir);
+            if (stat.isFile()) {
+                yield afs_1.afs.unlink(dir);
+            }
+            else if (stat.isDirectory()) {
+                let list = yield afs_1.afs.readdir(dir);
+                let tasks = [];
+                for (let f of list) {
+                    if (f == "." || f == "..")
+                        continue;
+                    let fp = path.join(dir, f);
+                    tasks.push(this.rm_r(fp));
+                }
+                yield Promise.all(tasks);
+                yield afs_1.afs.rmdir(dir);
+            }
+        });
     }
     static copy_files_with_config(cfg, src_root, dst_root) {
         return __awaiter(this, void 0, void 0, function* () {

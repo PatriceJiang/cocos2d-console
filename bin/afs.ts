@@ -8,5 +8,8 @@ export const afs = {
     exists: promisify(fs.exists),
     copyFile: promisify(fs.copyFile),
     writeFile: promisify(fs.writeFile),
-    mkdir: promisify(fs.mkdir)
+    mkdir: promisify(fs.mkdir),
+    mkdtemp: promisify(fs.mkdtemp),
+    unlink: promisify(fs.unlink),
+    rmdir: promisify(fs.rmdir)
 };

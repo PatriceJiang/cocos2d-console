@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.get_current_string = exports.has_key = exports.get_string = exports.set_current_language = void 0;
 const path = require("path");
 const fs = require("fs");
 const cfg_info = require("./strings.json");
@@ -59,7 +58,7 @@ function get_string(key, ...fmts) {
     if (cur_lang_string) {
         let fmt = cur_lang_string[key];
         if (!fmt) {
-            return `[KEY "${key}" is not found! lang: ${locale === null || locale === void 0 ? void 0 : locale.lang}]`;
+            return `[KEY "${key}" is not found! lang: ${locale.lang}]`;
         }
         if (fmts.length == 0) {
             return fmt;
@@ -100,7 +99,7 @@ function get_string(key, ...fmts) {
         }
         return ret.join("");
     }
-    return `[language ${locale === null || locale === void 0 ? void 0 : locale.lang} not set, key ${key}]`;
+    return `[language ${locale.lang} not set, key ${key}]`;
 }
 exports.get_string = get_string;
 function has_key(key, data) {

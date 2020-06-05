@@ -71,7 +71,7 @@ export function get_string(key:string, ...fmts: (string|number)[]) {
     if(cur_lang_string) {
         let fmt = cur_lang_string[key];
         if(!fmt){
-            return `[KEY "${key}" is not found! lang: ${locale?.lang}]`
+            return `[KEY "${key}" is not found! lang: ${locale!.lang}]`
         }
         if(fmts.length == 0) {
             return fmt;
@@ -109,7 +109,7 @@ export function get_string(key:string, ...fmts: (string|number)[]) {
         }
         return ret.join("");
     }
-    return `[language ${locale?.lang} not set, key ${key}]`
+    return `[language ${locale!.lang} not set, key ${key}]`
 }
 
 export function has_key(key:string, data: {[key:string]:string}|null):boolean {
