@@ -5,16 +5,7 @@ import * as path from "path";
 import * as ml from "./multi_language";
 import * as cocos_cfg from "./cocos_config.json";
 import * as os from "os";
-import {promisify} from "util";
-
-const afs = {
-    readFile: promisify(fs.readFile),
-    readdir: promisify(fs.readdir),
-    stat: promisify(fs.stat),
-    exists: promisify(fs.exists),
-    copyFile: promisify(fs.copyFile),
-    writeFile: promisify(fs.writeFile)
-};
+import {afs} from "./afs";
 
 enum ArgumentItemType {
     BOOL_FLAG,
@@ -367,7 +358,7 @@ export abstract class CCPlugin {
         let p = this.parser.get_string("platform");
         if(!p) {
             p = this.get_current_platform();
-            console.warn("platform not specified, use current platform ${p}");
+            console.warn(`platform not specified, use current platform ${p}`);
         }
         return p;
     }
@@ -473,7 +464,7 @@ export class CCHelper {
         }
     }
 
-    static copy_files_with_config(cfg:{from:string, to:string, include?:string[], exclude?:string[]}, src_root:string, dst_root:string) {
+    static async copy_files_with_config(cfg:{from:string, to:string, include?:string[], exclude?:string[]}, src_root:string, dst_root:string) {
         
         if(!fs.existsSync(src_root)){
             console.error(`copy file src_root ${src_root} is not exists!`);
@@ -551,11 +542,9 @@ export class CCHelper {
             }
         }
 
-        return new Promise((resolve, reject)=>{
-            let copy_from = this.replace_env_variables(path.normalize(path.join(src_root, from)));
-            let copy_to = this.replace_env_variables(path.normalize(path.join(dst_root, to)));
-            cp_r_async(src_root, from, copy_to).then(resolve, reject)
-        });
+        let copy_from = this.replace_env_variables(path.normalize(path.join(src_root, from)));
+        let copy_to = this.replace_env_variables(path.normalize(path.join(dst_root, to)));
+        await cp_r_async(src_root, from, copy_to);
     }
 
     static async replace_in_file( patterns: {reg:string, text:string}[], filepath:string) {

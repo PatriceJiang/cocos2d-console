@@ -15,15 +15,7 @@ const path = require("path");
 const ml = require("./multi_language");
 const cocos_cfg = require("./cocos_config.json");
 const os = require("os");
-const util_1 = require("util");
-const afs = {
-    readFile: util_1.promisify(fs.readFile),
-    readdir: util_1.promisify(fs.readdir),
-    stat: util_1.promisify(fs.stat),
-    exists: util_1.promisify(fs.exists),
-    copyFile: util_1.promisify(fs.copyFile),
-    writeFile: util_1.promisify(fs.writeFile)
-};
+const afs_1 = require("./afs");
 var ArgumentItemType;
 (function (ArgumentItemType) {
     ArgumentItemType[ArgumentItemType["BOOL_FLAG"] = 0] = "BOOL_FLAG";
@@ -326,7 +318,7 @@ class CCPlugin {
         let p = this.parser.get_string("platform");
         if (!p) {
             p = this.get_current_platform();
-            console.warn("platform not specified, use current platform ${p}");
+            console.warn(`platform not specified, use current platform ${p}`);
         }
         return p;
     }
@@ -365,7 +357,7 @@ class CCHelper {
     static copy_file_async(src, dst) {
         return __awaiter(this, void 0, void 0, function* () {
             this.mkdir_p_sync(path.parse(dst).dir);
-            yield afs.copyFile(src, dst);
+            yield afs_1.afs.copyFile(src, dst);
         });
     }
     static copy_recursive_async(src_dir, dst) {
@@ -373,14 +365,14 @@ class CCHelper {
             src_dir = this.replace_env_variables(src_dir);
             dst = this.replace_env_variables(dst);
             let tasks = [];
-            let stat = yield afs.stat(src_dir);
+            let stat = yield afs_1.afs.stat(src_dir);
             if (!stat) {
                 console.error(`failed to stat ${src_dir}`);
                 return;
             }
             if (stat.isDirectory()) {
                 this.mkdir_p_sync(dst);
-                let files = yield afs.readdir(src_dir);
+                let files = yield afs_1.afs.readdir(src_dir);
                 for (let f of files) {
                     if (f == "." || f == "..")
                         continue;
@@ -432,84 +424,84 @@ class CCHelper {
         }
     }
     static copy_files_with_config(cfg, src_root, dst_root) {
-        if (!fs.existsSync(src_root)) {
-            console.error(`copy file src_root ${src_root} is not exists!`);
-            return;
-        }
-        src_root = this.replace_env_variables(src_root);
-        dst_root = this.replace_env_variables(dst_root);
-        let from = this.replace_env_variables(cfg.from);
-        let to = this.replace_env_variables(cfg.to);
-        if (path.isAbsolute(from)) {
-            src_root = from;
-            from = ".";
-        }
-        if (path.isAbsolute(to)) {
-            dst_root = to;
-            to = ".";
-        }
-        let build_prefix_tree = (list0) => {
-            let tree = {};
-            let list = list0.map(x => Array.from(x));
-            while (list.length > 0) {
-                let t = list.shift();
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!fs.existsSync(src_root)) {
+                console.error(`copy file src_root ${src_root} is not exists!`);
+                return;
+            }
+            src_root = this.replace_env_variables(src_root);
+            dst_root = this.replace_env_variables(dst_root);
+            let from = this.replace_env_variables(cfg.from);
+            let to = this.replace_env_variables(cfg.to);
+            if (path.isAbsolute(from)) {
+                src_root = from;
+                from = ".";
+            }
+            if (path.isAbsolute(to)) {
+                dst_root = to;
+                to = ".";
+            }
+            let build_prefix_tree = (list0) => {
+                let tree = {};
+                let list = list0.map(x => Array.from(x));
+                while (list.length > 0) {
+                    let t = list.shift();
+                    let p = tree;
+                    while (t.length > 0) {
+                        let c = t.shift();
+                        if (!(c in p)) {
+                            p[c] = {};
+                        }
+                        p = p[c];
+                    }
+                }
+                return tree;
+            };
+            let match_prefix_tree = (str, tree) => {
+                if (tree == null) {
+                    return false;
+                }
+                let arr = Array.from(str);
+                let i = 0;
                 let p = tree;
-                while (t.length > 0) {
-                    let c = t.shift();
-                    if (!(c in p)) {
-                        p[c] = {};
-                    }
-                    p = p[c];
+                while (arr[i] in p) {
+                    p = p[arr[i]];
+                    i++;
                 }
-            }
-            return tree;
-        };
-        let match_prefix_tree = (str, tree) => {
-            if (tree == null) {
-                return false;
-            }
-            let arr = Array.from(str);
-            let i = 0;
-            let p = tree;
-            while (arr[i] in p) {
-                p = p[arr[i]];
-                i++;
-            }
-            return i == arr.length && Object.keys(p).length == 0;
-        };
-        let include_prefix = cfg.include ? build_prefix_tree(cfg.include) : null;
-        let exclude_prefix = cfg.exclude ? build_prefix_tree(cfg.exclude) : null;
-        let cp_r_async = (src_root, src_dir, dst_root) => __awaiter(this, void 0, void 0, function* () {
-            let curr_full_dir = path.join(src_root, src_dir);
-            let stat = yield afs.stat(curr_full_dir);
-            if (stat.isDirectory()) {
-                let files = yield afs.readdir(curr_full_dir);
-                let subcopies = [];
-                for (let f of files) {
-                    if (f == "." || f == "..")
-                        continue;
-                    let path_in_src_root = path.join(src_dir, f);
-                    if (exclude_prefix && match_prefix_tree(path_in_src_root, exclude_prefix)) {
-                        if (include_prefix && match_prefix_tree(path_in_src_root, include_prefix)) {
-                            //include
-                        }
-                        else {
-                            console.log(` - skip copy ${src_root} ${path_in_src_root} to ${dst_root}`);
+                return i == arr.length && Object.keys(p).length == 0;
+            };
+            let include_prefix = cfg.include ? build_prefix_tree(cfg.include) : null;
+            let exclude_prefix = cfg.exclude ? build_prefix_tree(cfg.exclude) : null;
+            let cp_r_async = (src_root, src_dir, dst_root) => __awaiter(this, void 0, void 0, function* () {
+                let curr_full_dir = path.join(src_root, src_dir);
+                let stat = yield afs_1.afs.stat(curr_full_dir);
+                if (stat.isDirectory()) {
+                    let files = yield afs_1.afs.readdir(curr_full_dir);
+                    let subcopies = [];
+                    for (let f of files) {
+                        if (f == "." || f == "..")
                             continue;
+                        let path_in_src_root = path.join(src_dir, f);
+                        if (exclude_prefix && match_prefix_tree(path_in_src_root, exclude_prefix)) {
+                            if (include_prefix && match_prefix_tree(path_in_src_root, include_prefix)) {
+                                //include
+                            }
+                            else {
+                                console.log(` - skip copy ${src_root} ${path_in_src_root} to ${dst_root}`);
+                                continue;
+                            }
                         }
+                        subcopies.push(cp_r_async(src_root, path_in_src_root, dst_root));
                     }
-                    subcopies.push(cp_r_async(src_root, path_in_src_root, dst_root));
+                    yield Promise.all(subcopies);
                 }
-                yield Promise.all(subcopies);
-            }
-            else if (stat.isFile()) {
-                yield this.copy_file_async(curr_full_dir, path.join(dst_root, src_dir));
-            }
-        });
-        return new Promise((resolve, reject) => {
+                else if (stat.isFile()) {
+                    yield this.copy_file_async(curr_full_dir, path.join(dst_root, src_dir));
+                }
+            });
             let copy_from = this.replace_env_variables(path.normalize(path.join(src_root, from)));
             let copy_to = this.replace_env_variables(path.normalize(path.join(dst_root, to)));
-            cp_r_async(src_root, from, copy_to).then(resolve, reject);
+            yield cp_r_async(src_root, from, copy_to);
         });
     }
     static replace_in_file(patterns, filepath) {
@@ -520,14 +512,14 @@ class CCHelper {
                 return;
             }
             // console.log(`replace ${filepath} with ${JSON.stringify(patterns)}`);
-            let lines = (yield afs.readFile(filepath)).toString("utf8").split("\n");
+            let lines = (yield afs_1.afs.readFile(filepath)).toString("utf8").split("\n");
             let new_content = lines.map(l => {
                 patterns.forEach(p => {
                     l = l.replace(new RegExp(p.reg), this.replace_env_variables(p.text));
                 });
                 return l;
             }).join("\n");
-            yield afs.writeFile(filepath, new_content);
+            yield afs_1.afs.writeFile(filepath, new_content);
         });
     }
 }
