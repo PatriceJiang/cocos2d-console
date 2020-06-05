@@ -45,6 +45,7 @@ export const pa = {
     language: {short:"-l", long:"--language", help:ml.get_string("NEW_ARG_LANG"), arg_type:ArgumentItemType.ENUM, enum_values:cocos_cfg.languages},
     do_list_templates: {short:"", long:"--list-templates", help:"List available templates. To be used with --template option.", arg_type: ArgumentItemType.ACTION},
     template_name: {short:"-k", long:"--template-name", help:'Name of the template to be used to create the game. To list available names, use --list-templates.', arg_type:ArgumentItemType.STRING_VALUE},
+    cmake_generator: {short:"-G", long:"--cmake-generator", help:"Set cmake generator", arg_type:ArgumentItemType.STRING_VALUE},
 };
 
 
