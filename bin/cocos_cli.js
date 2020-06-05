@@ -1,5 +1,15 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.CCHelper = exports.CCPlugin = exports.pa = void 0;
 const fs = require("fs");
 const path = require("path");
 const ml = require("./multi_language");
@@ -22,7 +32,6 @@ exports.pa = {
     proj_dir: { short: "", long: "--proj-dir", help: ml.get_string("COCOS_HELP_ARG_PROJ_DIR"), arg_type: ArgumentItemType.STRING_VALUE },
     package_name: { short: "-p", long: "--package", help: ml.get_string("NEW_ARG_PACKAGE"), arg_type: ArgumentItemType.STRING_VALUE },
     directory: { short: "-d", long: "--directory", help: ml.get_string("NEW_ARG_DIR"), arg_type: ArgumentItemType.STRING_VALUE },
-    // template: {short:"-t", long: "--template", help: ml.get_string("NEW_ARG_TEMPLATE"), arg_type: ArgumentItemType.STRING_VALUE},
     ios_bundleid: { short: "", long: "--ios-bundleid", help: ml.get_string("NEW_ARG_IOS_BUNDLEID"), arg_type: ArgumentItemType.STRING_VALUE },
     mac_bundleid: { short: "", long: "--mac-bundleid", help: ml.get_string("NEW_ARG_MAC_BUNDLEID"), arg_type: ArgumentItemType.STRING_VALUE },
     engine_path: { short: "-e", long: "--engine-path", help: ml.get_string("NEW_ARG_ENGINE_PATH"), arg_type: ArgumentItemType.STRING_VALUE },
@@ -256,6 +265,12 @@ class CCPlugin {
         let parser = this.parser;
         parser.print();
     }
+    set_env(key, value) {
+        process.env[key] = value;
+    }
+    get_env(key) {
+        return process.env[key];
+    }
     parse_args() {
         let parser = this.parser;
         parser.add_predefined_argument("src_dir");
@@ -267,6 +282,8 @@ class CCPlugin {
         this.define_args();
         let args = process.argv.slice(3);
         this.parser.parse(args);
+        //expose enviroment variables
+        this.set_env("COCOS_X_ROOT", this.get_cocos_root());
     }
     get_engine_path() {
         return null;
@@ -284,12 +301,15 @@ class CCPlugin {
         return this.get_templates_dir_names().map(x => path.join(template_dir, x));
     }
     exec() {
-        this.parse_args();
-        if (this.parser.call_all())
-            return;
-        this.parser.validate();
-        this.init();
-        this.run();
+        return __awaiter(this, void 0, void 0, function* () {
+            this.parse_args();
+            if (this.parser.call_all())
+                return;
+            this.parser.validate();
+            this.init();
+            yield this.run();
+            console.log(`done!`);
+        });
     }
     get args() {
         return this.parser;
@@ -420,13 +440,10 @@ class CCHelper {
                 let p = tree;
                 while (t.length > 0) {
                     let c = t.shift();
-                    if (c in p) {
-                        p = p[c];
-                        continue;
-                    }
-                    else {
+                    if (!(c in p)) {
                         p[c] = {};
                     }
+                    p = p[c];
                 }
             }
             return tree;
@@ -447,64 +464,61 @@ class CCHelper {
         let include_prefix = cfg.include ? build_prefix_tree(cfg.include) : null;
         let exclude_prefix = cfg.exclude ? build_prefix_tree(cfg.exclude) : null;
         let cp_r_async = (src_root, src_dir, dst_root) => {
-            let fullpath = path.join(src_root, src_dir);
             return new Promise((resolve, reject) => {
-                fs.stat(fullpath, (err, stat) => {
+                let curr_full_dir = path.join(src_root, src_dir);
+                fs.stat(curr_full_dir, (err, stat) => {
                     if (err) {
                         return reject(err);
                     }
                     if (stat.isDirectory()) {
-                        fs.readdir(fullpath, (err, files) => {
+                        fs.readdir(curr_full_dir, (err, files) => {
                             if (err) {
                                 reject(err);
                                 return;
                             }
+                            let subcopies = [];
                             for (let f of files) {
                                 if (f == "." || f == "..")
                                     continue;
-                                let cf = path.join(src_dir, f);
-                                if (exclude_prefix && match_prefix_tree(cf, exclude_prefix)) {
-                                    if (include_prefix && match_prefix_tree(cf, include_prefix)) {
+                                let path_in_src_root = path.join(src_dir, f);
+                                if (exclude_prefix && match_prefix_tree(path_in_src_root, exclude_prefix)) {
+                                    if (include_prefix && match_prefix_tree(path_in_src_root, include_prefix)) {
                                         //include
                                     }
                                     else {
+                                        console.log(` - skip copy ${src_root} ${path_in_src_root} to ${dst_root}`);
                                         continue;
                                     }
                                 }
-                                cp_r_async(src_root, path.join(src_dir, f), dst_root);
+                                subcopies.push(cp_r_async(src_root, path_in_src_root, dst_root));
                             }
-                            resolve();
+                            Promise.all(subcopies).then(resolve, reject);
                         });
                     }
                     else if (stat.isFile()) {
-                        this.copy_file_async(fullpath, path.join(dst_root, src_dir))
+                        this.copy_file_async(curr_full_dir, path.join(dst_root, src_dir))
                             .then(resolve, reject);
                     }
                 });
             });
         };
         return new Promise((resolve, reject) => {
-            let copy_from = path.normalize(path.join(src_root, from));
-            let copy_to = path.normalize(path.join(dst_root, to));
-            let stat = fs.statSync(copy_from);
-            if (stat.isFile()) {
-                this.copy_file_async(copy_from, copy_to).then(resolve, reject);
-            }
-            else {
-                cp_r_async(src_root, from, copy_to).then(resolve, reject);
-            }
+            let copy_from = this.replace_env_variables(path.normalize(path.join(src_root, from)));
+            let copy_to = this.replace_env_variables(path.normalize(path.join(dst_root, to)));
+            cp_r_async(src_root, from, copy_to).then(resolve, reject);
         });
     }
     static replace_in_file(patterns, filepath) {
+        filepath = this.replace_env_variables(filepath);
         if (!fs.existsSync(filepath)) {
             console.warn(`file ${filepath} not exists while replacing content!`);
             return;
         }
-        console.log(`replace ${filepath} with ${JSON.stringify(patterns)}`);
+        // console.log(`replace ${filepath} with ${JSON.stringify(patterns)}`);
         let lines = fs.readFileSync(filepath).toString("utf8").split("\n");
         let new_content = lines.map(l => {
             patterns.forEach(p => {
-                l = l.replace(new RegExp(p.reg), p.text);
+                l = l.replace(new RegExp(p.reg), this.replace_env_variables(p.text));
             });
             return l;
         }).join("\n");

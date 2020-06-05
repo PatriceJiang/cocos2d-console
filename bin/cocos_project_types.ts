@@ -45,7 +45,8 @@ export interface CocosProjectTasks {
     project_replace_ios_bundleid: {
         src_bundle_id:string,
         files:string[]
-    }
+    },
+    common_replace: {pattern:string, value:string, files:string[]}[];
 }
 
 export interface CocosProjecConfig {

@@ -15,7 +15,7 @@ export class CCPluginNEW extends CCPlugin {
         let parser = this.parser;
         parser.add_predefined_argument_with_default("package_name", "CocosGame");
         parser.add_required_predefined_argument("directory");
-        parser.add_required_predefined_argument("template")
+        //parser.add_required_predefined_argument("template")
         parser.add_predefined_argument_with_default("ios_bundleid", "org.cocos2dx.ios");
         parser.add_predefined_argument_with_default("mac_bundleid", "org.cocos2dx.mac");
         parser.add_predefined_argument("engine_path");
@@ -26,10 +26,11 @@ export class CCPluginNEW extends CCPlugin {
         parser.add_predefined_argument_with_default("template_name", "js-template-link");
     }
     init(): boolean {
-        let parser = this.parser;
-        console.log(`init plugin new`);
-        console.log(`name ${this.project_name}`);
+        
+        this.set_env("PROJECT_NAME", this.project_name!);
 
+        let parser = this.parser;
+        // console.log(`PROJECT_NAME name ${this.project_name}`);
         let cocos_dir = this.get_cocos_root();
         if(!fs.existsSync(path.join(cocos_dir!, "cocos/cocos2d.h"))) {
             console.error(`cocos2d.h not found in ${cocos_dir}, path incorrect!`);
@@ -39,7 +40,6 @@ export class CCPluginNEW extends CCPlugin {
         return true;
     }
     async run(): Promise<boolean> {
-        console.log(`run plugin new`);
         let lang = this.args.get_path("language");
         let package_name = this.args.get_string("package_name");
         let mac_bundleid = this.args.get_string("mac_bundleid");
@@ -163,7 +163,7 @@ export class TemplateCreator {
         }
 
         for(let key in this.template_info!){
-            console.log(`other commands ${key}`)
+            // console.log(`other commands ${key}`)
             await this.execute((this.template_info as any)[key] as any);
         }
     }
@@ -174,6 +174,11 @@ export class TemplateCreator {
                 CCHelper.copy_file_sync(this.cocos_root!, cmd.from, this.project_dir!, cmd.to);
             });
             delete cmds.append_file;
+        }
+
+        if(cmds.exclude_from_template) {
+            // do nothing
+            delete cmds.exclude_from_template;
         }
 
         if(cmds.append_x_engine) {
@@ -190,6 +195,7 @@ export class TemplateCreator {
         if(cmds.append_from_template) {
             let cmd = cmds.append_from_template;
 
+            // console.log(`append-from-template ${JSON.stringify(cmd)}`);
             await CCHelper.copy_files_with_config({
                 from: cmd.from, 
                 to: cmd.to,
@@ -254,6 +260,20 @@ export class TemplateCreator {
                 });
             });
             delete cmds.project_replace_ios_bundleid;
+        }
+
+        if(cmds.common_replace) {
+            for(let cmd of cmds.common_replace) {
+                for(let f of cmd.files) {
+                    let fp = path.join(this.project_dir!, f);
+                    replace_files_delay[fp] = replace_files_delay[fp] || [];
+                    replace_files_delay[fp].push({
+                        reg: cmd.pattern,
+                        content: cmd.value
+                    });
+                }
+            }
+            delete cmds.common_replace;
         }
 
         for(let fullpath in replace_files_delay) {
