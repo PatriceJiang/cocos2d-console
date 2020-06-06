@@ -9,6 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.CCHelper = exports.CCPlugin = exports.pa = void 0;
 const fs = require("fs");
 const path = require("path");
 const ml = require("./multi_language");
