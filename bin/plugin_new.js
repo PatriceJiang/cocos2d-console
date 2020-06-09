@@ -160,7 +160,7 @@ class TemplateCreator {
                 yield this.execute(this.template_info[key]);
             }
             project_CONFIG.engine_version = this.get_cocos_version();
-            fs.writeFileSync(path.join(this.project_dir, cocos_project.CONFIG), JSON.stringify(project_CONFIG, undefined, 4));
+            fs.writeFileSync(path.join(this.project_dir, cocos_project.CONFIG), JSON.stringify(project_CONFIG, undefined, 2));
         });
     }
     get_cocos_version() {
