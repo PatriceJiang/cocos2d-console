@@ -68,7 +68,11 @@ class CCPluginNEW extends cocos_cli_1.CCPlugin {
         if (this.args.get_otherargs().length == 0) {
             console.error(`argument project name is not set!`);
         }
-        return this.args.get_otherargs()[0];
+        let pname = this.args.get_otherargs()[0];
+        if (!pname.match(/^[a-zA-Z0-9-_]+$/)) {
+            console.error(`project name "${pname}" seems to be a bad argument!`);
+        }
+        return pname;
     }
     get project_dir() {
         let dir = this.args.get_path("directory");

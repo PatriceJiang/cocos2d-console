@@ -24,7 +24,6 @@ var ArgumentItemType;
     ArgumentItemType[ArgumentItemType["ENUM"] = 3] = "ENUM";
 })(ArgumentItemType || (ArgumentItemType = {}));
 /** pre-defined arguments */
-//export const pa:{[key:string]:ArgumentConfig} = {
 exports.pa = {
     help: { short: "-h", long: "--help", help: "show this message", arg_type: ArgumentItemType.ACTION },
     src_dir: { short: "-s", long: "--src", help: ml.get_string("COCOS_HELP_ARG_SRC"), arg_type: ArgumentItemType.STRING_VALUE },
@@ -44,7 +43,9 @@ exports.pa = {
     do_list_templates: { short: "", long: "--list-templates", help: "List available templates. To be used with --template option.", arg_type: ArgumentItemType.ACTION },
     template_name: { short: "-k", long: "--template-name", help: 'Name of the template to be used to create the game. To list available names, use --list-templates.', arg_type: ArgumentItemType.STRING_VALUE },
     cmake_generator: { short: "-G", long: "--cmake-generator", help: "Set cmake generator", arg_type: ArgumentItemType.STRING_VALUE },
-    cmake_path: { short: "", long: "--cmake-path", help: "path to cmake.exe or cmake", arg_type: ArgumentItemType.STRING_VALUE }
+    cmake_path: { short: "", long: "--cmake-path", help: "path to cmake.exe or cmake", arg_type: ArgumentItemType.STRING_VALUE },
+    ios_simulator: { short: "", long: "--ios-simulator", help: "enable iOS simulator support", arg_type: ArgumentItemType.BOOL_FLAG },
+    teamid: { short: "", long: "--team-id", help: "Apple developer team id", arg_type: ArgumentItemType.STRING_VALUE }
 };
 class ArgumentParser {
     constructor() {
@@ -263,6 +264,31 @@ class CCPlugin {
             }
         }
         return this._template_path;
+    }
+    get project_dir() {
+        let dir = this.args.get_path("directory");
+        return CCHelper.replace_env_variables(dir);
+    }
+    get_cmake_generator() {
+        return this.args.get_string("cmake_generator");
+    }
+    get_build_dir() {
+        let dir = this.args.get_string("build_dir");
+        let ext = "";
+        if (this.enable_ios_simulator()) {
+            ext = "-simulator";
+        }
+        return CCHelper.replace_env_variables(path.join(dir, `build-${this.get_platform()}${ext}`));
+    }
+    get_cmake_path() {
+        let cp = this.args.get_string("cmake_path");
+        return !!cp ? cp : "cmake";
+    }
+    enable_ios_simulator() {
+        return this.args.get_bool("ios_simulator");
+    }
+    get_app_team_id() {
+        return this.args.get_string("teamid");
     }
     do_list_platforms() {
         console.log("support platforms:");
@@ -537,7 +563,7 @@ class CCHelper {
                 console.warn(`file ${filepath} not exists while replacing content!`);
                 return;
             }
-            // console.log(`replace ${filepath} with ${JSON.stringify(patterns)}`);
+            console.log(`replace ${filepath} with ${JSON.stringify(patterns)}`);
             let lines = (yield afs_1.afs.readFile(filepath)).toString("utf8").split("\n");
             let new_content = lines.map(l => {
                 patterns.forEach(p => {
@@ -547,6 +573,19 @@ class CCHelper {
             }).join("\n");
             yield afs_1.afs.writeFile(filepath, new_content);
         });
+    }
+    static exact_value_from_file(regexp, filename, idx) {
+        if (!(fs.existsSync(filename))) {
+            console.error(`file ${filename} not exist!`);
+            return;
+        }
+        let lines = fs.readFileSync(filename).toString("utf-8").split("\n");
+        for (let l of lines) {
+            let r = l.match(regexp);
+            if (r) {
+                return r[idx];
+            }
+        }
     }
 }
 exports.CCHelper = CCHelper;
