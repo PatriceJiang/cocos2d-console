@@ -147,7 +147,7 @@ class ArgumentParser {
                 }
             }
             else {
-                console.error(`unknown argument: ${line}`);
+                console.warn(`unknown argument: ${line}`);
             }
         }
     }

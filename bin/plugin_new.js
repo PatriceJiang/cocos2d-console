@@ -13,8 +13,15 @@ exports.TemplateCreator = exports.CCPluginNEW = void 0;
 const cocos_cli_1 = require("./cocos_cli");
 const path = require("path");
 const fs = require("fs");
+const cocos_project = require("./cocos_project_types");
 const cocos2dx_files = require("../../../templates/cocos2dx_files.json");
 const PackageNewConfig = "cocos-project-template.json";
+let project_CONFIG = {
+    project_type: "js",
+    has_native: true,
+    engine_version: "",
+    custom_step_script: null /* script path*/
+};
 class CCPluginNEW extends cocos_cli_1.CCPlugin {
     define_args() {
         let parser = this.parser;
@@ -38,6 +45,9 @@ class CCPluginNEW extends cocos_cli_1.CCPlugin {
         if (!fs.existsSync(path.join(cocos_dir, "cocos/cocos2d.h"))) {
             console.error(`cocos2d.h not found in ${cocos_dir}, path incorrect!`);
             return false;
+        }
+        if (this.project_dir && !fs.existsSync(this.project_dir)) {
+            cocos_cli_1.CCHelper.mkdir_p_sync(this.project_dir);
         }
         return true;
     }
@@ -76,7 +86,9 @@ class CCPluginNEW extends cocos_cli_1.CCPlugin {
     }
     get project_dir() {
         let dir = this.args.get_path("directory");
-        return dir;
+        if (!dir || !this.project_name)
+            return;
+        return path.join(dir, this.project_name);
     }
     get engine_path() {
         return this.args.get_path("engine_path");
@@ -147,7 +159,24 @@ class TemplateCreator {
                 // console.log(`other commands ${key}`)
                 yield this.execute(this.template_info[key]);
             }
+            project_CONFIG.engine_version = this.get_cocos_version();
+            fs.writeFileSync(path.join(this.project_dir, cocos_project.CONFIG), JSON.stringify(project_CONFIG, undefined, 4));
         });
+    }
+    get_cocos_version() {
+        const cocos2d_h = path.join(this.cocos_root, "cocos/cocos2d.h");
+        if (!fs.existsSync(cocos2d_h)) {
+            return "unknown";
+        }
+        else {
+            let lines = fs.readFileSync(cocos2d_h).toString("utf-8").split("\n").filter(x => x.indexOf("COCOS2D_VERSION") >= 0);
+            if (lines.length > 0) {
+                let ps = lines[0].split(" ");
+                let v = parseInt(ps[ps.length - 1]);
+                return `${v >> 16}.${(v & 0x0000FF00) >> 8}.${v & 0x000000FF}`;
+            }
+        }
+        return "unknown";
     }
     execute(cmds) {
         return __awaiter(this, void 0, void 0, function* () {

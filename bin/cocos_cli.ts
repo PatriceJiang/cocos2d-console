@@ -150,7 +150,7 @@ class ArgumentParser {
                     this.values[cfg.field!] = cfg.action!;
                 }
             } else {
-                console.error(`unknown argument: ${line}`)
+                console.warn(`unknown argument: ${line}`)
             }
         }
     }

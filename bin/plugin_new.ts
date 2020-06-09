@@ -9,6 +9,14 @@ import * as cocos2dx_files from "../../../templates/cocos2dx_files.json";
 
 const PackageNewConfig = "cocos-project-template.json";
 
+let project_CONFIG = 
+{
+    project_type: "js",
+    has_native: true,
+    engine_version: "",
+    custom_step_script:null /* script path*/
+};
+
 export class CCPluginNEW extends CCPlugin {
 
     define_args(): void {
@@ -35,6 +43,10 @@ export class CCPluginNEW extends CCPlugin {
         if(!fs.existsSync(path.join(cocos_dir!, "cocos/cocos2d.h"))) {
             console.error(`cocos2d.h not found in ${cocos_dir}, path incorrect!`);
             return false;
+        }
+
+        if(this.project_dir && !fs.existsSync(this.project_dir)) {
+            CCHelper.mkdir_p_sync(this.project_dir);
         }
 
         return true;
@@ -77,7 +89,8 @@ export class CCPluginNEW extends CCPlugin {
 
     get project_dir():string | undefined {
         let dir = this.args.get_path("directory");
-        return dir;
+        if(!dir || !this.project_name) return;
+        return path.join(dir, this.project_name!);
     }
 
     get engine_path() :string{
@@ -170,6 +183,25 @@ export class TemplateCreator {
             // console.log(`other commands ${key}`)
             await this.execute((this.template_info as any)[key] as any);
         }
+
+        project_CONFIG.engine_version = this.get_cocos_version();
+
+        fs.writeFileSync(path.join(this.project_dir!, cocos_project.CONFIG), JSON.stringify(project_CONFIG, undefined, 4));
+    }
+
+    get_cocos_version():string {
+        const cocos2d_h = path.join(this.cocos_root!, "cocos/cocos2d.h");
+        if(!fs.existsSync(cocos2d_h)) {
+            return "unknown";
+        } else {
+            let lines = fs.readFileSync(cocos2d_h).toString("utf-8").split("\n").filter(x=>x.indexOf("COCOS2D_VERSION") >= 0);
+            if(lines.length > 0) {
+                let ps = lines[0].split(" ");
+                let v = parseInt(ps[ps.length - 1]);
+                return `${v >> 16}.${(v & 0x0000FF00) >> 8}.${v & 0x000000FF}`;   
+            }
+        }
+        return "unknown";
     }
 
     private async execute(cmds: cocos_project.CocosProjectTasks) {
