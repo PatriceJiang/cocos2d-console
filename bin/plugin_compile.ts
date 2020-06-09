@@ -22,6 +22,7 @@ export class CCPluginCOMPILE extends CCPlugin {
         this.parser.add_required_predefined_argument("build_dir");
         this.parser.add_required_predefined_argument("directory");
         this.parser.add_predefined_argument("cmake_generator");
+        this.parser.add_predefined_argument("cmake_path");
     }
     init(): boolean {
         this._platform = this.get_platform();
@@ -38,6 +39,21 @@ export class CCPluginCOMPILE extends CCPlugin {
 
 
     async compile_platform(p:string) {
+        let c = this.get_current_platform();
+
+        let allow_targets = (cocos_cfg.availableTargetPlatforms as any)[c];
+        if(!!!allow_targets) {
+            console.error(`current host platform ${c} is not supported.`);
+            process.exit(1);
+            return;
+        }
+
+        if(allow_targets.indexOf(p) < 0) {
+            console.error(`target platform "${p}" is not listed [${allow_targets.join(", ")}]`);
+            process.exit(1);
+            return;
+        }
+
         if(p === "mac") {
            await this.compile_mac();
         } else if(p == "ios") {
@@ -58,6 +74,11 @@ export class CCPluginCOMPILE extends CCPlugin {
         return CCHelper.replace_env_variables(path.join(dir, `build-${this._platform}`));
     }
 
+    get_cmake_path(): string {
+        let cp = this.args.get_string("cmake_path");
+        return !!cp ? cp : "cmake";
+    }
+
     get project_dir():string | undefined {
         let dir = this.args.get_path("directory");
         return CCHelper.replace_env_variables(dir);
@@ -65,7 +86,7 @@ export class CCPluginCOMPILE extends CCPlugin {
 
     async run_cmake(args:string[]) {
         return new Promise((resolve, reject)=>{
-            let cp = child_process.spawn("cmake", args, {
+            let cp = child_process.spawn(this.get_cmake_path(), args, {
                 stdio:["pipe","pipe","pipe"],
                 env: process.env,
                 shell: true
@@ -153,11 +174,6 @@ class MacCompileCMD extends PlatformCompileCmd {
 
 
 class Win32CompileCMD extends PlatformCompileCmd {
-    
-
-    get_win32_cmake():string {
-        return "cmake";
-    }
 
     async win32_select_cmake_generator_args(): Promise<string[]> {
 
@@ -188,7 +204,7 @@ class Win32CompileCMD extends PlatformCompileCmd {
 
         let try_run_cmake_with_arguments=(args:string[], workdir:string) => {
             return new Promise<boolean>((resolve, reject)=>{
-                let cp = child_process.spawn(this.get_win32_cmake(), args, {
+                let cp = child_process.spawn(this.plugin.get_cmake_path(), args, {
                     cwd: workdir,
                     env: process.env,
                     shell:true

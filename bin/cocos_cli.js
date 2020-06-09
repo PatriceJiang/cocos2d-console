@@ -44,6 +44,7 @@ exports.pa = {
     do_list_templates: { short: "", long: "--list-templates", help: "List available templates. To be used with --template option.", arg_type: ArgumentItemType.ACTION },
     template_name: { short: "-k", long: "--template-name", help: 'Name of the template to be used to create the game. To list available names, use --list-templates.', arg_type: ArgumentItemType.STRING_VALUE },
     cmake_generator: { short: "-G", long: "--cmake-generator", help: "Set cmake generator", arg_type: ArgumentItemType.STRING_VALUE },
+    cmake_path: { short: "", long: "--cmake-path", help: "path to cmake.exe or cmake", arg_type: ArgumentItemType.STRING_VALUE }
 };
 class ArgumentParser {
     constructor() {
@@ -96,7 +97,11 @@ class ArgumentParser {
             cfgs.length = 0;
             let prefix;
             if (line.startsWith("--")) {
-                cfgs = this.definations.filter(x => line.startsWith(x.long)).sort((a, b) => a.long.length - b.long.length);
+                let p1 = line;
+                if (line.match(/^--[-_a-z]+=/)) { // contains `=` --template-name=
+                    p1 = line.split("=")[0];
+                }
+                cfgs = this.definations.filter(x => x.long == p1).sort((a, b) => a.long.length - b.long.length);
                 if (cfgs.length > 0)
                     prefix = cfgs[0].long;
             }
