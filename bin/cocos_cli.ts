@@ -268,7 +268,7 @@ export abstract class CCPlugin {
         return path.join(__dirname, "..");
     }
 
-    get_template_root_path(): string | null {
+    get_templates_root_path(): string | null {
 
         let engine_path = this.get_engine_path();
         if (!!engine_path) {
@@ -382,15 +382,21 @@ export abstract class CCPlugin {
     ///////////////// helper methods
 
     get_templates_dir_names(): string[] {
-        let template_dir = this.get_template_root_path();
+        let template_dir = this.get_templates_root_path();
+        let dirs:string[] = [];
         if (template_dir) {
-            return fs.readdirSync(template_dir).filter(x => !x.startsWith("."));
+            dirs = fs.readdirSync(template_dir).filter(x => !x.startsWith("."));
+            dirs = dirs.filter( d=> {
+                let p = path.join(template_dir!, d);
+                let stat = fs.statSync(p);
+                return stat.isDirectory();
+            });
         }
-        return [];
+        return dirs;
     }
 
     get_template_dir_paths(): string[] {
-        let template_dir = this.get_template_root_path();
+        let template_dir = this.get_templates_root_path();
         return this.get_templates_dir_names().map(x => path.join(template_dir!, x));
     }
 
@@ -421,7 +427,7 @@ export abstract class CCPlugin {
 export class CCHelper {
 
     static replace_env_variables(str: string): string {
-        return str.replace(/\$\{([^\}]*)\}/g, (_, n) => process.env[n]!).
+        return str.replace(/\$\{([^\}]*)\}/g, (_, n) => process.env[n] == undefined ? _ : process.env[n]!).
             replace(/(\~)/g, (_, n) => process.env["HOME"]!);
     }
 

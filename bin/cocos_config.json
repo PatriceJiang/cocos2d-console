@@ -8,6 +8,7 @@
         "win32",
         "android"
     ],
+    "support_templates":["link", "default"],
     "default": {
         "project_name": "MyGame"
     },

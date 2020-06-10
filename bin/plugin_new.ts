@@ -1,11 +1,12 @@
 
-import {CCPlugin, pa, CCHelper} from "./cocos_cli";
+import {CCPlugin, pa, CCHelper as ccutils} from "./cocos_cli";
 
 import * as path from "path";
 import * as fs  from "fs";
 import * as cocos_project from "./cocos_project_types";
 import * as cocos2dx_files from "../../../templates/cocos2dx_files.json";
-
+import * as cocos_cfg from "./cocos_config.json";
+import { rootCertificates } from "tls";
 
 const PackageNewConfig = "cocos-project-template.json";
 
@@ -31,7 +32,7 @@ export class CCPluginNEW extends CCPlugin {
         parser.add_predefined_argument("no_native");
         parser.add_predefined_argument_with_default("language", "js");
         parser.add_predefined_argument("do_list_templates", this.do_list_templates.bind(this));
-        parser.add_predefined_argument_with_default("template_name", "js-template-link");
+        parser.add_predefined_argument_with_default("template_name", "link");
     }
     init(): boolean {
         
@@ -46,7 +47,7 @@ export class CCPluginNEW extends CCPlugin {
         }
 
         if(this.project_dir && !fs.existsSync(this.project_dir)) {
-            CCHelper.mkdir_p_sync(this.project_dir);
+            ccutils.mkdir_p_sync(this.project_dir);
         }
 
         return true;
@@ -56,9 +57,10 @@ export class CCPluginNEW extends CCPlugin {
         let package_name = this.args.get_string("package_name");
         let mac_bundleid = this.args.get_string("mac_bundleid");
         let ios_bundleid = this.args.get_string("ios_bundleid");
-        let template_dir = path.join(this.get_template_root_path()!, this.template_name);
+        let tpn = this.args.get_path("template_name");
+        let template_dir = path.join(this.get_templates_root_path()!, this.selected_template_dir_name);
         let tp = new TemplateCreator(lang, this.get_cocos_root()!, this.project_name!, this.project_dir!, 
-            this.template_name!, template_dir ,package_name, mac_bundleid, ios_bundleid);
+            tpn, template_dir ,package_name, mac_bundleid, ios_bundleid);
 
         await tp.run(); // async
         return true;    
@@ -97,17 +99,25 @@ export class CCPluginNEW extends CCPlugin {
         return this.args.get_path("engine_path");
     }
 
-    get template_name() : string {
+    get selected_template_dir_name() : string {
         let tpn = this.args.get_path("template_name");
-        if(this.get_templates_dir_names().filter(x=>x.startsWith(tpn)).length == 0) {
-            console.error(`can not find template ${tpn}`);
+        let template_names = this.get_templates_dir_names();
+        if(template_names.length == 1) {
+            return template_names[0];
         }
-        return tpn;
+        let dirs = template_names.filter(x=>x.indexOf(tpn) >= 0)
+        if(dirs.length == 0) {
+            console.error(`can not find template ${tpn} in ${template_names.join(",")}`);
+        }
+        if(dirs.length > 1) {
+            console.error(`find multiple template dirs in for ${tpn}`);
+        }
+        return dirs[0];
     }
     
     get selected_template_path():string|null {
-        if(!this.template_name) return null;
-        let dir = path.join(this.get_template_root_path()!, this.template_name);
+        if(!this.selected_template_dir_name) return null;
+        let dir = path.join(this.get_templates_root_path()!, this.selected_template_dir_name);
         if(!fs.existsSync(dir)) {
             console.error(`selected template path not exists: ${dir}`);
         }
@@ -154,6 +164,10 @@ export class TemplateCreator {
         this.tp_name = tp_name;
         this.tp_dir = tp_dir;
 
+        if(cocos_cfg.support_templates.indexOf(tp_name) < 0) {
+            console.error(`template name "${tp_name}" is not supported!`);
+        }
+
         if(!fs.existsSync(path.join(tp_dir, PackageNewConfig))) {
             console.error(`can not find ${PackageNewConfig} in ${tp_dir}`);
             return;
@@ -169,7 +183,7 @@ export class TemplateCreator {
     async run() {
         let default_cmds = this.template_info!.do_default;
         if(default_cmds){
-            await CCHelper.copy_files_with_config(
+            await ccutils.copy_files_with_config(
                 {
                     from: this.tp_dir!,
                     to: this.project_dir!,
@@ -207,7 +221,7 @@ export class TemplateCreator {
     private async execute(cmds: cocos_project.CocosProjectTasks) {
         if(cmds.append_file) {
             cmds.append_file.forEach(cmd=> {
-                CCHelper.copy_file_sync(this.cocos_root!, cmd.from, this.project_dir!, cmd.to);
+                ccutils.copy_file_sync(this.cocos_root!, cmd.from, this.project_dir!, cmd.to);
             });
             delete cmds.append_file;
         }
@@ -217,13 +231,15 @@ export class TemplateCreator {
             delete cmds.exclude_from_template;
         }
 
-        if(cmds.append_x_engine) {
+        /// only in link mode
+        let project_x_root = cmds.append_x_engine!;
+        if(cmds.append_x_engine && this.tp_name != "link") {
             let common = cocos2dx_files.common;    
             let to = path.join(this.project_dir!, cmds.append_x_engine.to);
-            await CCHelper.par_copy_files(20, this.cocos_root!, common, to);
+            await ccutils.par_copy_files(20, this.cocos_root!, common, to);
             if(this.lang == "js") {
                 let fileList = cocos2dx_files.js;
-                await CCHelper.par_copy_files(20, this.cocos_root!, fileList, to);
+                await ccutils.par_copy_files(20, this.cocos_root!, fileList, to);
             }
             delete cmds.append_x_engine;
         }
@@ -232,7 +248,7 @@ export class TemplateCreator {
             let cmd = cmds.append_from_template;
 
             // console.log(`append-from-template ${JSON.stringify(cmd)}`);
-            await CCHelper.copy_files_with_config({
+            await ccutils.copy_files_with_config({
                 from: cmd.from, 
                 to: cmd.to,
                 exclude: cmd.exclude
@@ -298,6 +314,35 @@ export class TemplateCreator {
             delete cmds.project_replace_ios_bundleid;
         }
 
+        if(cmds.project_replace_cocos_x_root) {
+            let cmd = cmds.project_replace_cocos_x_root!;
+            let cocos_x_root = path.normalize(this.cocos_root!);
+            let proj_cocos_path = path.normalize(path.join(this.project_dir!, project_x_root.to)); 
+            for(let f of cmd.files) {
+
+                let p = typeof(f) == "string" ? f : f.file;
+
+                let fp = path.join(this.project_dir!, p);
+                let list = replace_files_delay[fp] = replace_files_delay[fp] || [];
+
+                if(this.tp_name == "link") {
+                    list.push({
+                        reg: cmd.pattern,
+                        content: !!f.link ? f.link! as string : cocos_x_root
+                    });
+                }else {
+                    // use relative path
+                    let rel_path = path.relative(fp, proj_cocos_path);
+                    list.push({
+                        reg: cmd.pattern,
+                        content: !!(f as any).default ? (f as any).default : rel_path
+                    })
+                }
+            } 
+
+            delete cmds.project_replace_cocos_x_root;
+        }
+
         if(cmds.common_replace) {
             for(let cmd of cmds.common_replace) {
                 for(let f of cmd.files) {
@@ -314,7 +359,7 @@ export class TemplateCreator {
 
         for(let fullpath in replace_files_delay) {
             let cfg = replace_files_delay[fullpath];
-            await CCHelper.replace_in_file(cfg.map(x=>{
+            await ccutils.replace_in_file(cfg.map(x=>{
                 return {reg: x.reg, text: x.content};
             }), fullpath);
         }
