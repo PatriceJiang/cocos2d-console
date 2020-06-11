@@ -12,7 +12,8 @@ export class CCPluginGENERATE extends CCPlugin {
 
 
     depends():string |null {
-        return "new";
+       // return "new"; // recreate project file will override everything
+       return null;
     }
 
     define_args(): void {

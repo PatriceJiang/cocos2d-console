@@ -19,7 +19,8 @@ const afs_1 = require("./afs");
 const PackageNewConfig = "cocos-project-template.json";
 class CCPluginGENERATE extends cocos_cli_1.CCPlugin {
     depends() {
-        return "new";
+        // return "new"; // recreate project file will override everything
+        return null;
     }
     define_args() {
         this.parser.add_required_predefined_argument("build_dir");

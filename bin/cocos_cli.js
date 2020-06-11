@@ -167,9 +167,15 @@ class ArgumentParser {
         return this.values[key] === true;
     }
     get_path(key) {
+        if (!(key in this.values)) {
+            console.warn(`argument ${key} not set!`);
+        }
         return (key in this.values) ? this.values[key] : this.defination_for(key).default_value;
     }
     get_string(key) {
+        if (!(key in this.values)) {
+            console.warn(`argument ${key} not set!`);
+        }
         return this.get_path(key);
     }
     exist_key(key) {
@@ -385,15 +391,18 @@ class CCPlugin {
         }
         return p;
     }
+    get_plugin_name() { return this._plugin_name; }
+    set_plugin_name(name) { this._plugin_name = name; }
     exec() {
         return __awaiter(this, void 0, void 0, function* () {
             this.parse_args();
             if (this.parser.call_all())
                 return;
             this.parser.validate();
+            console.log(`[plugin ${this.get_plugin_name()}]: running ...`);
             this.init();
             yield this.run();
-            console.log(`done!`);
+            console.log(`  [plugin ${this.get_plugin_name()}]: done!`);
         });
     }
     get args() {
@@ -621,6 +630,31 @@ class cchelper {
             }
         }
     }
+    static run_cmd(cmd, args, slient, cwd) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return new Promise((resolve, reject) => {
+                console.log(`[run_cmd]: ${cmd} ${args.join(" ")}`);
+                let cp = child_process.spawn(cmd, args, {
+                    shell: true,
+                    env: process.env,
+                    cwd: cwd || process.cwd()
+                });
+                if (!slient) {
+                    cp.stdout.on(`data`, (chunk) => {
+                        console.log(`[run_cmd ${cmd}] ${chunk}`);
+                    });
+                    cp.stderr.on(`data`, (chunk) => {
+                        console.log(`[run_cmd ${cmd} - error] ${chunk}`);
+                    });
+                }
+                cp.on("close", (code, signal) => {
+                    if (code != 0 && !slient)
+                        return reject(`faile to exec ${cmd} ${args.join(" ")}`);
+                    resolve();
+                });
+            });
+        });
+    }
 }
 exports.cchelper = cchelper;
 class CCPluginRunner {
@@ -640,33 +674,29 @@ class CCPluginRunner {
             console.error(`${klsName} not defined in plugin_${plugin_name}.js`);
             process.exit(1);
         }
+        p.set_plugin_name(plugin_name);
         return p;
     }
     run() {
-        let plugin_name = process.argv[2];
-        let p = null;
-        let script_path = path.join(__dirname, `plugin_${plugin_name}.js`);
-        if (!fs.existsSync(script_path)) {
-            console.error(`Plugin ${plugin_name} is not defined!`);
-            return;
-        }
-        let exp = require(script_path);
-        let klsName = `CCPlugin${plugin_name.toUpperCase()}`;
-        if (klsName in exp) {
-            p = new exp[klsName];
-        }
-        else {
-            console.error(`${klsName} not defined in plugin_${plugin_name}.js`);
-            return;
-        }
-        if (p) {
-            p.exec();
-        }
+        return __awaiter(this, void 0, void 0, function* () {
+            let plugin_name = process.argv[2];
+            let task = [];
+            let p;
+            do {
+                p = this.load_plugin(plugin_name);
+                task.push(p);
+            } while ((plugin_name = p.depends()) !== null);
+            for (let i = task.length - 1; i >= 0; i--) {
+                yield task[i].exec();
+            }
+        });
     }
 }
 process.on("unhandledRejection", (err, promise) => {
     console.error(err);
 });
 let runner = new CCPluginRunner();
-runner.run();
+runner.run().then(() => {
+    console.log(`[all done!]`);
+});
 //# sourceMappingURL=cocos_cli.js.map

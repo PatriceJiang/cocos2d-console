@@ -11,16 +11,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CCPluginCOMPILE = void 0;
 const cocos_cli_1 = require("./cocos_cli");
+const path = require("path");
 const cocos_cfg = require("./cocos_config.json");
+const fs = require("fs");
 const PackageNewConfig = "cocos-project-template.json";
 class CCPluginCOMPILE extends cocos_cli_1.CCPlugin {
     depends() {
         return "generate";
     }
     define_args() {
-        this.parser.add_required_predefined_argument("build_dir");
+        this.parser.add_predefined_argument("build_dir");
         this.parser.add_predefined_argument("cmake_path");
         this.parser.add_predefined_argument("ios_simulator");
+        this.parser.add_predefined_argument("directory");
     }
     init() {
         if (cocos_cfg.platforms.indexOf(this.get_platform()) < 0) {
@@ -64,6 +67,7 @@ class CCPluginCOMPILE extends cocos_cli_1.CCPlugin {
     }
     compile_android() {
         return __awaiter(this, void 0, void 0, function* () {
+            yield (new AndroidCompileCMD(this)).compile();
         });
     }
     compile_ios() {
@@ -92,7 +96,7 @@ class IOSCompileCMD extends PlatformCompileCmd {
     compile() {
         return __awaiter(this, void 0, void 0, function* () {
             let build_dir = this.plugin.get_build_dir();
-            yield this.plugin.run_cmake(["--build", `${build_dir}`, "--config", "Debug", "--", "-allowProvisioningUpdates"]);
+            yield this.plugin.run_cmake(["--build", `${build_dir}`, "--config", "Debug", "--", "-allowProvisioningUpdates", "-quiet"]);
             return true;
         });
     }
@@ -101,7 +105,7 @@ class MacCompileCMD extends PlatformCompileCmd {
     compile() {
         return __awaiter(this, void 0, void 0, function* () {
             let build_dir = this.plugin.get_build_dir();
-            yield this.plugin.run_cmake(["--build", `${build_dir}`, "--config", "Debug"]);
+            yield this.plugin.run_cmake(["--build", `${build_dir}`, "--config", "Debug", "--", "-quiet"]);
             return true;
         });
     }
@@ -111,6 +115,25 @@ class Win32CompileCMD extends PlatformCompileCmd {
         return __awaiter(this, void 0, void 0, function* () {
             let build_dir = this.plugin.get_build_dir();
             yield this.plugin.run_cmake(["--build", `${cocos_cli_1.cchelper.fix_path(build_dir)}`, "--config", "Debug"]);
+            return true;
+        });
+    }
+}
+class AndroidCompileCMD extends PlatformCompileCmd {
+    compile() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let build_dir = this.plugin.get_build_dir();
+            let proj_dir = path.join(this.plugin.project_dir, "frameworks/runtime-src/proj.android-studio");
+            if (!fs.existsSync(proj_dir)) {
+                console.error(`dir ${proj_dir} not exits`);
+                return false;
+            }
+            let gradle = "gradlew";
+            if (this.plugin.get_platform() == "win32") {
+                gradle += ".bat";
+            }
+            gradle = path.join(proj_dir, gradle);
+            yield cocos_cli_1.cchelper.run_cmd(gradle, ["assembleDebug", "--quiet", "--build-cache", "--project-cache-dir", build_dir], false, proj_dir);
             return true;
         });
     }

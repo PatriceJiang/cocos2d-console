@@ -7,6 +7,8 @@ import * as cocos_cfg from "./cocos_config.json";
 import * as os from "os";
 import { afs } from "./afs";
 import * as child_process from "child_process";
+import { stringify } from "querystring";
+import { clearScreenDown } from "readline";
 
 enum ArgumentItemType {
     BOOL_FLAG,
@@ -172,10 +174,16 @@ class ArgumentParser {
     }
 
     public get_path(key: string): string {
+        if(!(key in this.values)){
+            console.warn(`argument ${key} not set!`);
+        } 
         return (key in this.values) ? this.values[key] as string : this.defination_for(key)!.default_value!;
     }
 
     public get_string(key: string): string {
+        if(!(key in this.values)){
+            console.warn(`argument ${key} not set!`);
+        } 
         return this.get_path(key);
     }
 
@@ -437,13 +445,17 @@ export abstract class CCPlugin {
         return p;
     }
 
+    get_plugin_name():string { return this._plugin_name!;}
+    set_plugin_name(name:string) {this._plugin_name = name;}
+
     async exec() {
         this.parse_args();
         if (this.parser.call_all()) return;
         this.parser.validate();
+        console.log(`[plugin ${this.get_plugin_name()}]: running ...`);
         this.init();
         await this.run();
-        console.log(`done!`);
+        console.log(`  [plugin ${this.get_plugin_name()}]: done!`);
     }
 
 
@@ -677,6 +689,29 @@ export class cchelper {
         }
     }
 
+    static async run_cmd(cmd:string, args:string[], slient:boolean, cwd?:string){
+        return new Promise<any>((resolve, reject)=>{
+            console.log(`[run_cmd]: ${cmd} ${args.join(" ")}`);
+            let cp = child_process.spawn(cmd, args, {
+                shell:true,
+                env:process.env,
+                cwd: cwd!|| process.cwd()
+            });
+            if(!slient){ 
+                cp.stdout.on(`data`, (chunk)=>{
+                    console.log(`[run_cmd ${cmd}] ${chunk}`);
+                });
+                cp.stderr.on(`data`, (chunk)=>{
+                    console.log(`[run_cmd ${cmd} - error] ${chunk}`);
+                });
+            }
+            cp.on("close", (code, signal)=>{
+                if(code != 0 && !slient) return reject(`faile to exec ${cmd} ${args.join(" ")}`);
+                resolve();
+            });
+        });
+    }
+
 }
 
 
@@ -698,28 +733,21 @@ class CCPluginRunner {
             console.error(`${klsName} not defined in plugin_${plugin_name}.js`);
             process.exit(1);
         }
+        p!.set_plugin_name(plugin_name);
         return p!;
     }
 
-    public run() {
-        let plugin_name = process.argv[2]
-        let p: CCPlugin | null = null;
-        let script_path = path.join(__dirname, `plugin_${plugin_name}.js`);
-        if (!fs.existsSync(script_path)) {
-            console.error(`Plugin ${plugin_name} is not defined!`);
-            return;
-        }
+    public async run() {
+        let plugin_name = process.argv[2];
+        let task: CCPlugin[] = [];
+        let p:CCPlugin;
+        do {
+            p = this.load_plugin(plugin_name);
+            task.push(p);
+        } while ( (plugin_name = p.depends()!) !== null);
 
-        let exp = require(script_path);
-        let klsName = `CCPlugin${plugin_name.toUpperCase()}`;
-        if (klsName in exp) {
-            p = new exp[klsName];
-        } else {
-            console.error(`${klsName} not defined in plugin_${plugin_name}.js`);
-            return;
-        }
-        if (p) {
-            p.exec();
+        for(let i = task.length - 1; i>=0;i--) {
+            await task[i].exec();
         }
     }
 }
@@ -730,4 +758,6 @@ process.on("unhandledRejection", (err, promise) => {
 
 let runner = new CCPluginRunner();
 
-runner.run();
+runner.run().then(()=>{
+    console.log(`[all done!]`);
+});
