@@ -9,13 +9,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CCHelper = exports.CCPlugin = exports.pa = void 0;
+exports.cchelper = exports.CCPlugin = exports.pa = void 0;
 const fs = require("fs");
 const path = require("path");
 const ml = require("./multi_language");
 const cocos_cfg = require("./cocos_config.json");
 const os = require("os");
 const afs_1 = require("./afs");
+const child_process = require("child_process");
 var ArgumentItemType;
 (function (ArgumentItemType) {
     ArgumentItemType[ArgumentItemType["BOOL_FLAG"] = 0] = "BOOL_FLAG";
@@ -267,7 +268,7 @@ class CCPlugin {
     }
     get project_dir() {
         let dir = this.args.get_path("directory");
-        return CCHelper.replace_env_variables(dir);
+        return cchelper.replace_env_variables(dir);
     }
     get_cmake_generator() {
         return this.args.get_string("cmake_generator");
@@ -278,7 +279,7 @@ class CCPlugin {
         if (this.enable_ios_simulator()) {
             ext = "-simulator";
         }
-        return CCHelper.replace_env_variables(path.join(dir, `build-${this.get_platform()}${ext}`));
+        return cchelper.replace_env_variables(path.join(dir, `build-${this.get_platform()}${ext}`));
     }
     get_cmake_path() {
         let cp = this.args.get_string("cmake_path");
@@ -289,6 +290,30 @@ class CCPlugin {
     }
     get_app_team_id() {
         return this.args.get_string("teamid");
+    }
+    run_cmake(args) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return new Promise((resolve, reject) => {
+                let cp = child_process.spawn(this.get_cmake_path(), args, {
+                    stdio: ["pipe", "pipe", "pipe"],
+                    env: process.env,
+                    shell: true
+                });
+                cp.stdout.on("data", (data) => {
+                    console.log(`[cmake] ${data}`);
+                });
+                cp.stderr.on("data", (data) => {
+                    console.error(`[cmake-err] ${data}`);
+                });
+                cp.on("close", (code, sig) => {
+                    if (code !== 0) {
+                        reject(new Error(`run cmake failed "cmake ${args.join(" ")}", code: ${code}, signal: ${sig}`));
+                        return;
+                    }
+                    resolve();
+                });
+            });
+        });
     }
     do_list_platforms() {
         console.log("support platforms:");
@@ -376,10 +401,13 @@ class CCPlugin {
     }
 }
 exports.CCPlugin = CCPlugin;
-class CCHelper {
+class cchelper {
     static replace_env_variables(str) {
         return str.replace(/\$\{([^\}]*)\}/g, (_, n) => process.env[n] == undefined ? _ : process.env[n]).
             replace(/(\~)/g, (_, n) => process.env["HOME"]);
+    }
+    static fix_path(p) {
+        return path.win32.normalize(p).replace(/\\/g, "\\\\");
     }
     static copy_file_sync(src_root, src_file, dst_root, dst_file) {
         src_root = this.replace_env_variables(src_root);
@@ -594,8 +622,26 @@ class CCHelper {
         }
     }
 }
-exports.CCHelper = CCHelper;
+exports.cchelper = cchelper;
 class CCPluginRunner {
+    load_plugin(plugin_name) {
+        let p = null;
+        let script_path = path.join(__dirname, `plugin_${plugin_name}.js`);
+        if (!fs.existsSync(script_path)) {
+            console.error(`Plugin ${plugin_name} is not defined!`);
+            process.exit(1);
+        }
+        let exp = require(script_path);
+        let klsName = `CCPlugin${plugin_name.toUpperCase()}`;
+        if (klsName in exp) {
+            p = new exp[klsName];
+        }
+        else {
+            console.error(`${klsName} not defined in plugin_${plugin_name}.js`);
+            process.exit(1);
+        }
+        return p;
+    }
     run() {
         let plugin_name = process.argv[2];
         let p = null;

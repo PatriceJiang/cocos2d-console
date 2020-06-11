@@ -16,6 +16,9 @@ const fs = require("fs");
 const child_process = require("child_process");
 const PackageNewConfig = "cocos-project-template.json";
 class CCPluginRUN extends cocos_cli_1.CCPlugin {
+    depends() {
+        return "compile";
+    }
     define_args() {
         this.parser.add_required_predefined_argument("build_dir");
     }
@@ -38,7 +41,7 @@ class CCPluginRUN extends cocos_cli_1.CCPlugin {
         if (!fs.existsSync(cmake_cache)) {
             console.error(`can not find "CMakeCache.txt" in ${this.get_build_dir()}, please run "cmake -G" first`);
         }
-        let project_name = cocos_cli_1.CCHelper.exact_value_from_file(/CMAKE_PROJECT_NAME:\w+=(\w+)/, cmake_cache, 1);
+        let project_name = cocos_cli_1.cchelper.exact_value_from_file(/CMAKE_PROJECT_NAME:\w+=(\w+)/, cmake_cache, 1);
         return project_name;
     }
     mac_run(project_name) {

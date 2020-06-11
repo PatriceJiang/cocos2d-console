@@ -6,6 +6,7 @@ import * as ml from "./multi_language";
 import * as cocos_cfg from "./cocos_config.json";
 import * as os from "os";
 import { afs } from "./afs";
+import * as child_process from "child_process";
 
 enum ArgumentItemType {
     BOOL_FLAG,
@@ -242,6 +243,7 @@ export abstract class CCPlugin {
 
     parser: ArgumentParser = new ArgumentParser();
 
+
     get_cocos_root(): string | null {
 
         let engine_path = this.get_engine_path();
@@ -290,7 +292,7 @@ export abstract class CCPlugin {
 
     get project_dir(): string | undefined {
         let dir = this.args.get_path("directory");
-        return CCHelper.replace_env_variables(dir);
+        return cchelper.replace_env_variables(dir);
     }
 
     get_cmake_generator(): string | undefined {
@@ -303,7 +305,7 @@ export abstract class CCPlugin {
         if(this.enable_ios_simulator()){
             ext="-simulator";
         }
-        return CCHelper.replace_env_variables(path.join(dir, `build-${this.get_platform()}${ext}`));
+        return cchelper.replace_env_variables(path.join(dir, `build-${this.get_platform()}${ext}`));
     }
 
     get_cmake_path(): string {
@@ -317,6 +319,30 @@ export abstract class CCPlugin {
 
     get_app_team_id():string|undefined {
         return this.args.get_string("teamid");
+    }
+
+
+    async run_cmake(args: string[]) {
+        return new Promise((resolve, reject) => {
+            let cp = child_process.spawn(this.get_cmake_path(), args, {
+                stdio: ["pipe", "pipe", "pipe"],
+                env: process.env,
+                shell: true
+            });
+            cp.stdout.on("data", (data) => {
+                console.log(`[cmake] ${data}`);
+            });
+            cp.stderr.on("data", (data) => {
+                console.error(`[cmake-err] ${data}`);
+            });
+            cp.on("close", (code, sig) => {
+                if (code !== 0) {
+                    reject(new Error(`run cmake failed "cmake ${args.join(" ")}", code: ${code}, signal: ${sig}`));
+                    return;
+                }
+                resolve();
+            });
+        });
     }
 
     private do_list_platforms() {
@@ -375,6 +401,8 @@ export abstract class CCPlugin {
 
     abstract async run(): Promise<boolean>;
 
+    abstract depends():string|null;
+
     get_engine_path(): string | null {
         return null;
     }
@@ -424,11 +452,16 @@ export abstract class CCPlugin {
     }
 }
 
-export class CCHelper {
+export class cchelper {
 
     static replace_env_variables(str: string): string {
         return str.replace(/\$\{([^\}]*)\}/g, (_, n) => process.env[n] == undefined ? _ : process.env[n]!).
             replace(/(\~)/g, (_, n) => process.env["HOME"]!);
+    }
+
+
+    static fix_path(p: string): string {
+        return path.win32.normalize(p).replace(/\\/g, "\\\\");
     }
 
     static copy_file_sync(src_root: string, src_file: string, dst_root: string, dst_file: string) {
@@ -648,6 +681,26 @@ export class CCHelper {
 
 
 class CCPluginRunner {
+
+    private load_plugin(plugin_name:string):CCPlugin {
+        let p: CCPlugin | null = null;
+        let script_path = path.join(__dirname, `plugin_${plugin_name}.js`);
+        if (!fs.existsSync(script_path)) {
+            console.error(`Plugin ${plugin_name} is not defined!`);
+            process.exit(1);
+        }
+
+        let exp = require(script_path);
+        let klsName = `CCPlugin${plugin_name.toUpperCase()}`;
+        if (klsName in exp) {
+            p = new exp[klsName];
+        } else {
+            console.error(`${klsName} not defined in plugin_${plugin_name}.js`);
+            process.exit(1);
+        }
+        return p!;
+    }
+
     public run() {
         let plugin_name = process.argv[2]
         let p: CCPlugin | null = null;

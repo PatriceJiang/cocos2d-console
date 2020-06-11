@@ -1,5 +1,5 @@
 
-import {CCPlugin, pa, CCHelper as ccutils} from "./cocos_cli";
+import {CCPlugin, pa, cchelper as ccutils} from "./cocos_cli";
 
 import * as path from "path";
 import * as fs  from "fs";
@@ -19,6 +19,10 @@ let project_CONFIG =
 };
 
 export class CCPluginNEW extends CCPlugin {
+
+    depends():string|null {
+        return null;
+    }
 
     define_args(): void {
         let parser = this.parser;
@@ -326,9 +330,10 @@ export class TemplateCreator {
                 let list = replace_files_delay[fp] = replace_files_delay[fp] || [];
 
                 if(this.tp_name == "link") {
+                    console.log(`cocos_x_root ${cocos_x_root} ${f}`);
                     list.push({
                         reg: cmd.pattern,
-                        content: !!f.link ? f.link! as string : cocos_x_root
+                        content: typeof f.link == "string" ? f.link as string : cocos_x_root
                     });
                 }else {
                     // use relative path

@@ -1,4 +1,4 @@
-import { CCPlugin, pa, CCHelper } from "./cocos_cli";
+import { CCPlugin, pa, cchelper } from "./cocos_cli";
 
 import * as path from "path";
 import * as fs from "fs";
@@ -12,6 +12,11 @@ import { afs } from "./afs";
 const PackageNewConfig = "cocos-project-template.json";
 
 export class CCPluginRUN extends CCPlugin {
+
+    depends():string | null {
+        return "compile";
+    }
+
     define_args(): void {
         this.parser.add_required_predefined_argument("build_dir");
     }
@@ -33,7 +38,7 @@ export class CCPluginRUN extends CCPlugin {
         if (!fs.existsSync(cmake_cache)) {
             console.error(`can not find "CMakeCache.txt" in ${this.get_build_dir()}, please run "cmake -G" first`);
         }
-        let project_name = CCHelper.exact_value_from_file(/CMAKE_PROJECT_NAME:\w+=(\w+)/, cmake_cache, 1);
+        let project_name = cchelper.exact_value_from_file(/CMAKE_PROJECT_NAME:\w+=(\w+)/, cmake_cache, 1);
         return project_name;
     }
 

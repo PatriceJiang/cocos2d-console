@@ -24,6 +24,9 @@ let project_CONFIG = {
     custom_step_script: null /* script path*/
 };
 class CCPluginNEW extends cocos_cli_1.CCPlugin {
+    depends() {
+        return null;
+    }
     define_args() {
         let parser = this.parser;
         parser.add_predefined_argument_with_default("package_name", "CocosGame");
@@ -48,7 +51,7 @@ class CCPluginNEW extends cocos_cli_1.CCPlugin {
             return false;
         }
         if (this.project_dir && !fs.existsSync(this.project_dir)) {
-            cocos_cli_1.CCHelper.mkdir_p_sync(this.project_dir);
+            cocos_cli_1.cchelper.mkdir_p_sync(this.project_dir);
         }
         return true;
     }
@@ -160,7 +163,7 @@ class TemplateCreator {
         return __awaiter(this, void 0, void 0, function* () {
             let default_cmds = this.template_info.do_default;
             if (default_cmds) {
-                yield cocos_cli_1.CCHelper.copy_files_with_config({
+                yield cocos_cli_1.cchelper.copy_files_with_config({
                     from: this.tp_dir,
                     to: this.project_dir,
                     exclude: default_cmds.exclude_from_template
@@ -195,7 +198,7 @@ class TemplateCreator {
         return __awaiter(this, void 0, void 0, function* () {
             if (cmds.append_file) {
                 cmds.append_file.forEach(cmd => {
-                    cocos_cli_1.CCHelper.copy_file_sync(this.cocos_root, cmd.from, this.project_dir, cmd.to);
+                    cocos_cli_1.cchelper.copy_file_sync(this.cocos_root, cmd.from, this.project_dir, cmd.to);
                 });
                 delete cmds.append_file;
             }
@@ -208,17 +211,17 @@ class TemplateCreator {
             if (cmds.append_x_engine && this.tp_name != "link") {
                 let common = cocos2dx_files.common;
                 let to = path.join(this.project_dir, cmds.append_x_engine.to);
-                yield cocos_cli_1.CCHelper.par_copy_files(20, this.cocos_root, common, to);
+                yield cocos_cli_1.cchelper.par_copy_files(20, this.cocos_root, common, to);
                 if (this.lang == "js") {
                     let fileList = cocos2dx_files.js;
-                    yield cocos_cli_1.CCHelper.par_copy_files(20, this.cocos_root, fileList, to);
+                    yield cocos_cli_1.cchelper.par_copy_files(20, this.cocos_root, fileList, to);
                 }
                 delete cmds.append_x_engine;
             }
             if (cmds.append_from_template) {
                 let cmd = cmds.append_from_template;
                 // console.log(`append-from-template ${JSON.stringify(cmd)}`);
-                yield cocos_cli_1.CCHelper.copy_files_with_config({
+                yield cocos_cli_1.cchelper.copy_files_with_config({
                     from: cmd.from,
                     to: cmd.to,
                     exclude: cmd.exclude
@@ -286,9 +289,10 @@ class TemplateCreator {
                     let fp = path.join(this.project_dir, p);
                     let list = replace_files_delay[fp] = replace_files_delay[fp] || [];
                     if (this.tp_name == "link") {
+                        console.log(`cocos_x_root ${cocos_x_root} ${f}`);
                         list.push({
                             reg: cmd.pattern,
-                            content: !!f.link ? f.link : cocos_x_root
+                            content: typeof f.link == "string" ? f.link : cocos_x_root
                         });
                     }
                     else {
@@ -317,7 +321,7 @@ class TemplateCreator {
             }
             for (let fullpath in replace_files_delay) {
                 let cfg = replace_files_delay[fullpath];
-                yield cocos_cli_1.CCHelper.replace_in_file(cfg.map(x => {
+                yield cocos_cli_1.cchelper.replace_in_file(cfg.map(x => {
                     return { reg: x.reg, text: x.content };
                 }), fullpath);
             }
