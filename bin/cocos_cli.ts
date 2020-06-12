@@ -51,8 +51,9 @@ export const pa = {
     cmake_generator: { short: "-G", long: "--cmake-generator", help: "Set cmake generator", arg_type: ArgumentItemType.STRING_VALUE },
     cmake_path: { short: "", long: "--cmake-path", help: "path to cmake.exe or cmake", arg_type: ArgumentItemType.STRING_VALUE },
     ios_simulator: { short: "", long: "--ios-simulator", help: "enable iOS simulator support", arg_type: ArgumentItemType.BOOL_FLAG },
-    teamid:{short:"", long:"--team-id", help:"Apple developer team id", arg_type:ArgumentItemType.STRING_VALUE}
+    teamid: { short: "", long: "--team-id", help: "Apple developer team id", arg_type: ArgumentItemType.STRING_VALUE },
 };
+
 
 
 class ArgumentParser {
@@ -174,16 +175,16 @@ class ArgumentParser {
     }
 
     public get_path(key: string): string {
-        if(!(key in this.values)){
-            console.warn(`argument ${key} not set!`);
-        } 
+        if (!(key in this.values)) {
+            console.log(`[warn] argument ${key} not set!`);
+        }
         return (key in this.values) ? this.values[key] as string : this.defination_for(key)!.default_value!;
     }
 
     public get_string(key: string): string {
-        if(!(key in this.values)){
-            console.warn(`argument ${key} not set!`);
-        } 
+        if (!(key in this.values)) {
+            console.log(`[warn] argument ${key} not set!`);
+        }
         return this.get_path(key);
     }
 
@@ -195,7 +196,7 @@ class ArgumentParser {
         if (typeof this.values[key] === "function") {
             (this.values[key] as any).apply();
         } else {
-            console.error(`argument value of ${key} is not a function`)
+            console.log(`[warn] argument value of ${key} is not a function`)
         }
     }
 
@@ -310,8 +311,8 @@ export abstract class CCPlugin {
     get_build_dir(): string {
         let dir = this.args.get_string("build_dir");
         let ext = "";
-        if(this.enable_ios_simulator()){
-            ext="-simulator";
+        if (this.enable_ios_simulator()) {
+            ext = "-simulator";
         }
         return cchelper.replace_env_variables(path.join(dir, `build-${this.get_platform()}${ext}`));
     }
@@ -321,11 +322,11 @@ export abstract class CCPlugin {
         return !!cp ? cp : "cmake";
     }
 
-    enable_ios_simulator():boolean {
+    enable_ios_simulator(): boolean {
         return this.args.get_bool("ios_simulator");
     }
 
-    get_app_team_id():string|undefined {
+    get_app_team_id(): string | undefined {
         return this.args.get_string("teamid");
     }
 
@@ -373,7 +374,7 @@ export abstract class CCPlugin {
         return process.env[key]!;
     }
 
-    protected get_current_platform(): string {
+    get_current_platform(): string {
         let p = os.platform();
         if (p === "darwin") {
             return "mac";
@@ -409,7 +410,7 @@ export abstract class CCPlugin {
 
     abstract async run(): Promise<boolean>;
 
-    abstract depends():string|null;
+    abstract depends(): string | null;
 
     get_engine_path(): string | null {
         return null;
@@ -419,10 +420,10 @@ export abstract class CCPlugin {
 
     get_templates_dir_names(): string[] {
         let template_dir = this.get_templates_root_path();
-        let dirs:string[] = [];
+        let dirs: string[] = [];
         if (template_dir) {
             dirs = fs.readdirSync(template_dir).filter(x => !x.startsWith("."));
-            dirs = dirs.filter( d=> {
+            dirs = dirs.filter(d => {
                 let p = path.join(template_dir!, d);
                 let stat = fs.statSync(p);
                 return stat.isDirectory();
@@ -445,8 +446,8 @@ export abstract class CCPlugin {
         return p;
     }
 
-    get_plugin_name():string { return this._plugin_name!;}
-    set_plugin_name(name:string) {this._plugin_name = name;}
+    get_plugin_name(): string { return this._plugin_name!; }
+    set_plugin_name(name: string) { this._plugin_name = name; }
 
     async exec() {
         this.parse_args();
@@ -473,7 +474,18 @@ export class cchelper {
 
 
     static fix_path(p: string): string {
-        return path.win32.normalize(p).replace(/\\/g, "\\\\");
+        if (os.platform() == "win32") {
+            return p.replace(/\\/g, "\\\\");
+        }
+        return p;
+    }
+
+    static async delay<T>(ms: number, cb: () => Promise<T>): Promise<T> {
+        return new Promise((resolve, reject) => {
+            setTimeout(async () => {
+                cb().then(resolve, reject);
+            }, ms);
+        });
     }
 
     static copy_file_sync(src_root: string, src_file: string, dst_root: string, dst_file: string) {
@@ -481,15 +493,15 @@ export class cchelper {
         src_file = this.replace_env_variables(src_file);
         dst_root = this.replace_env_variables(dst_root);
         dst_file = this.replace_env_variables(dst_file);
-        this.mkdir_p_sync(dst_root);
-        this.mkdir_p_sync(path.join(dst_root, dst_file, ".."));
+        this.make_directory_recursive(dst_root);
+        this.make_directory_recursive(path.join(dst_root, dst_file, ".."));
         let src = path.join(src_root, src_file);
         let dst = path.join(dst_root, dst_file);
         fs.copyFileSync(src, dst);
     }
 
     static async copy_file_async(src: string, dst: string) {
-        this.mkdir_p_sync(path.parse(dst).dir);
+        this.make_directory_recursive(path.parse(dst).dir);
         await afs.copyFile(src, dst);
     }
 
@@ -505,7 +517,7 @@ export class cchelper {
             return;
         }
         if (stat.isDirectory()) {
-            this.mkdir_p_sync(dst);
+            this.make_directory_recursive(dst);
             let files = await afs.readdir(src_dir);
             for (let f of files) {
                 if (f == "." || f == "..") continue;
@@ -515,11 +527,18 @@ export class cchelper {
             }
             await Promise.all(tasks);
         } else if (stat.isFile()) {
-            await this.copy_file_async(src_dir, dst);
+            try {
+                await this.copy_file_async(src_dir, dst);
+            } catch (e) {
+                await this.delay(10, async () => {
+                    console.warn(`warning: retry copying ${src_dir} ... ${e}`);
+                    await this.copy_file_async(src_dir, dst);
+                });
+            }
         }
     }
 
-    static par_copy_files(par: number, src_root: string, files: string[], dst_dir: string) {
+    static parallel_copy_files(par: number, src_root: string, files: string[], dst_dir: string) {
         let running_tasks = 0;
         return new Promise((resolve, reject) => {
             let copy_async = async (src: string, dst: string) => {
@@ -531,7 +550,12 @@ export class cchelper {
             let schedule_copy = () => {
                 if (files.length > 0 && running_tasks < par) {
                     let f = files.shift()!;
-                    copy_async(path.join(src_root, f), path.join(dst_dir, f))
+                    let src_file = path.join(src_root, f);
+                    if(fs.existsSync(src_file)){
+                        copy_async(src_file, path.join(dst_dir, f))
+                    }else{
+                        console.warn(`warning: copy_file: ${src_file} not exists!`);
+                    }
                 }
                 if (files.length == 0 && running_tasks == 0) {
                     resolve();
@@ -541,7 +565,7 @@ export class cchelper {
         });
     }
 
-    static mkdir_p_sync(dir: string) {
+    static make_directory_recursive(dir: string) {
         if (dir.length == 0) return;
         let dirs: string[] = [];
         let p = dir;
@@ -555,7 +579,7 @@ export class cchelper {
         }
     }
 
-    static async rm_r(dir: string) {
+    static async remove_directory_recursive(dir: string) {
         let stat = await afs.stat(dir);
         if (stat.isFile()) {
             await afs.unlink(dir);
@@ -565,7 +589,7 @@ export class cchelper {
             for (let f of list) {
                 if (f == "." || f == "..") continue;
                 let fp = path.join(dir, f);
-                tasks.push(this.rm_r(fp));
+                tasks.push(this.remove_directory_recursive(fp));
             }
             await Promise.all(tasks);
             await afs.rmdir(dir);
@@ -658,10 +682,10 @@ export class cchelper {
     static async replace_in_file(patterns: { reg: string, text: string }[], filepath: string) {
         filepath = this.replace_env_variables(filepath);
         if (!fs.existsSync(filepath)) {
-            console.warn(`file ${filepath} not exists while replacing content!`);
+            console.warn(`warning: file ${filepath} not exists while replacing content!`);
             return;
         }
-         console.log(`replace ${filepath} with ${JSON.stringify(patterns)}`);
+        //console.log(`replace ${filepath} with ${JSON.stringify(patterns)}`);
         let lines = (await afs.readFile(filepath)).toString("utf8").split("\n");
 
         let new_content = lines.map(l => {
@@ -689,24 +713,24 @@ export class cchelper {
         }
     }
 
-    static async run_cmd(cmd:string, args:string[], slient:boolean, cwd?:string){
-        return new Promise<any>((resolve, reject)=>{
+    static async run_cmd(cmd: string, args: string[], slient: boolean, cwd?: string) {
+        return new Promise<any>((resolve, reject) => {
             console.log(`[run_cmd]: ${cmd} ${args.join(" ")}`);
             let cp = child_process.spawn(cmd, args, {
-                shell:true,
-                env:process.env,
-                cwd: cwd!|| process.cwd()
+                shell: true,
+                env: process.env,
+                cwd: cwd! || process.cwd()
             });
-            if(!slient){ 
-                cp.stdout.on(`data`, (chunk)=>{
+            if (!slient) {
+                cp.stdout.on(`data`, (chunk) => {
                     console.log(`[run_cmd ${cmd}] ${chunk}`);
                 });
-                cp.stderr.on(`data`, (chunk)=>{
+                cp.stderr.on(`data`, (chunk) => {
                     console.log(`[run_cmd ${cmd} - error] ${chunk}`);
                 });
             }
-            cp.on("close", (code, signal)=>{
-                if(code != 0 && !slient) return reject(`faile to exec ${cmd} ${args.join(" ")}`);
+            cp.on("close", (code, signal) => {
+                if (code != 0 && !slient) return reject(`faile to exec ${cmd} ${args.join(" ")}`);
                 resolve();
             });
         });
@@ -717,7 +741,7 @@ export class cchelper {
 
 class CCPluginRunner {
 
-    private load_plugin(plugin_name:string):CCPlugin {
+    private load_plugin(plugin_name: string): CCPlugin {
         let p: CCPlugin | null = null;
         let script_path = path.join(__dirname, `plugin_${plugin_name}.js`);
         if (!fs.existsSync(script_path)) {
@@ -740,13 +764,13 @@ class CCPluginRunner {
     public async run() {
         let plugin_name = process.argv[2];
         let task: CCPlugin[] = [];
-        let p:CCPlugin;
+        let p: CCPlugin;
         do {
             p = this.load_plugin(plugin_name);
             task.push(p);
-        } while ( (plugin_name = p.depends()!) !== null);
+        } while ((plugin_name = p.depends()!) !== null);
 
-        for(let i = task.length - 1; i>=0;i--) {
+        for (let i = task.length - 1; i >= 0; i--) {
             await task[i].exec();
         }
     }
@@ -758,6 +782,6 @@ process.on("unhandledRejection", (err, promise) => {
 
 let runner = new CCPluginRunner();
 
-runner.run().then(()=>{
+runner.run().then(() => {
     console.log(`[all done!]`);
 });

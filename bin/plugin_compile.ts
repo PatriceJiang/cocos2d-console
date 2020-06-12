@@ -109,7 +109,7 @@ class MacCompileCMD extends PlatformCompileCmd {
 class Win32CompileCMD extends PlatformCompileCmd {
     async compile() {
         let build_dir = this.plugin.get_build_dir();
-        await this.plugin.run_cmake(["--build", `${cchelper.fix_path(build_dir)}`, "--config", "Debug"]);
+        await this.plugin.run_cmake(["--build", `${cchelper.fix_path(build_dir)}`, "--config", "Debug", "--", "-verbosity:quiet"]);
         return true;
     }
 }
@@ -123,7 +123,7 @@ class AndroidCompileCMD extends PlatformCompileCmd {
             return false;
         }
         let gradle = "gradlew";
-        if(this.plugin.get_platform() == "win32") {
+        if(this.plugin.get_current_platform() == "win32") {
             gradle += ".bat";
         }
         gradle = path.join(proj_dir, gradle);

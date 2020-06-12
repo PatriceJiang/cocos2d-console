@@ -9,7 +9,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CCPluginCOMPILE = void 0;
 const cocos_cli_1 = require("./cocos_cli");
 const path = require("path");
 const cocos_cfg = require("./cocos_config.json");
@@ -114,7 +113,7 @@ class Win32CompileCMD extends PlatformCompileCmd {
     compile() {
         return __awaiter(this, void 0, void 0, function* () {
             let build_dir = this.plugin.get_build_dir();
-            yield this.plugin.run_cmake(["--build", `${cocos_cli_1.cchelper.fix_path(build_dir)}`, "--config", "Debug"]);
+            yield this.plugin.run_cmake(["--build", `${cocos_cli_1.cchelper.fix_path(build_dir)}`, "--config", "Debug", "--", "-verbosity:quiet"]);
             return true;
         });
     }
@@ -129,7 +128,7 @@ class AndroidCompileCMD extends PlatformCompileCmd {
                 return false;
             }
             let gradle = "gradlew";
-            if (this.plugin.get_platform() == "win32") {
+            if (this.plugin.get_current_platform() == "win32") {
                 gradle += ".bat";
             }
             gradle = path.join(proj_dir, gradle);

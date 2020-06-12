@@ -9,7 +9,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CCPluginGENERATE = void 0;
 const cocos_cli_1 = require("./cocos_cli");
 const path = require("path");
 const os = require("os");
@@ -105,7 +104,7 @@ class IOSGenerateCMD extends PlatformGenerateCmd {
                 throw new Error(`CMakeLists.txt not found in ${project_src_dir}`);
             }
             if (!(yield afs_1.afs.exists(build_dir))) {
-                cocos_cli_1.cchelper.mkdir_p_sync(build_dir);
+                cocos_cli_1.cchelper.make_directory_recursive(build_dir);
             }
             let osx_sysroot = "iphoneos";
             let ext = [];
@@ -139,7 +138,7 @@ class MacGenerateCMD extends PlatformGenerateCmd {
                 throw new Error(`CMakeLists.txt not found in ${project_src_dir}`);
             }
             if (!(yield afs_1.afs.exists(build_dir))) {
-                cocos_cli_1.cchelper.mkdir_p_sync(build_dir);
+                cocos_cli_1.cchelper.make_directory_recursive(build_dir);
             }
             yield this.plugin.run_cmake(["-S", `${project_src_dir}`, "-GXcode", `-B${build_dir}`, "-DCMAKE_SYSTEM_NAME=Darwin"]);
             return true;
@@ -200,9 +199,9 @@ class Win32GenerateCMD extends PlatformGenerateCmd {
                     available_generators.push(cfg.G);
                     break;
                 }
-                yield cocos_cli_1.cchelper.rm_r(build_dir);
+                yield cocos_cli_1.cchelper.remove_directory_recursive(build_dir);
             }
-            yield cocos_cli_1.cchelper.rm_r(test_proj_dir);
+            yield cocos_cli_1.cchelper.remove_directory_recursive(test_proj_dir);
             let ret = [];
             if (available_generators.length == 0) {
                 return []; // use cmake default option -G
@@ -223,7 +222,7 @@ class Win32GenerateCMD extends PlatformGenerateCmd {
                 throw new Error(`CMakeLists.txt not found in ${project_src_dir}`);
             }
             if (!(yield afs_1.afs.exists(build_dir))) {
-                cocos_cli_1.cchelper.mkdir_p_sync(build_dir);
+                cocos_cli_1.cchelper.make_directory_recursive(build_dir);
             }
             let g = this.plugin.get_cmake_generator();
             let generate_args = [];

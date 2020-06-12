@@ -9,13 +9,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TemplateCreator = exports.CCPluginNEW = void 0;
 const cocos_cli_1 = require("./cocos_cli");
 const path = require("path");
 const fs = require("fs");
 const cocos_project = require("./cocos_project_types");
 const cocos2dx_files = require("../../../templates/cocos2dx_files.json");
 const cocos_cfg = require("./cocos_config.json");
+const afs_1 = require("./afs");
 const PackageNewConfig = "cocos-project-template.json";
 let project_CONFIG = {
     project_type: "js",
@@ -31,7 +31,6 @@ class CCPluginNEW extends cocos_cli_1.CCPlugin {
         let parser = this.parser;
         parser.add_predefined_argument_with_default("package_name", "CocosGame");
         parser.add_required_predefined_argument("directory");
-        //parser.add_required_predefined_argument("template")
         parser.add_predefined_argument_with_default("ios_bundleid", "org.cocos2dx.ios");
         parser.add_predefined_argument_with_default("mac_bundleid", "org.cocos2dx.mac");
         parser.add_predefined_argument("engine_path");
@@ -51,19 +50,13 @@ class CCPluginNEW extends cocos_cli_1.CCPlugin {
             return false;
         }
         if (this.project_dir && !fs.existsSync(this.project_dir)) {
-            cocos_cli_1.cchelper.mkdir_p_sync(this.project_dir);
+            cocos_cli_1.cchelper.make_directory_recursive(this.project_dir);
         }
         return true;
     }
     run() {
         return __awaiter(this, void 0, void 0, function* () {
-            let lang = this.args.get_path("language");
-            let package_name = this.args.get_string("package_name");
-            let mac_bundleid = this.args.get_string("mac_bundleid");
-            let ios_bundleid = this.args.get_string("ios_bundleid");
-            let tpn = this.args.get_path("template_name");
-            let template_dir = path.join(this.get_templates_root_path(), this.selected_template_dir_name);
-            let tp = new TemplateCreator(lang, this.get_cocos_root(), this.project_name, this.project_dir, tpn, template_dir, package_name, mac_bundleid, ios_bundleid);
+            let tp = new TemplateCreator(this);
             yield tp.run(); // async
             return true;
         });
@@ -127,7 +120,7 @@ class CCPluginNEW extends cocos_cli_1.CCPlugin {
         let check_files = ["main.js", "project.json", PackageNewConfig, "frameworks"];
         for (let f of check_files) {
             if (!fs.existsSync(path.join(dir, f))) {
-                console.warn(`file "${f}" does not exists in ${dir}, template path can be incorrect setting!`);
+                console.warn(`warning: file "${f}" does not exists in ${dir}, template path can be incorrect setting!`);
             }
         }
         return dir;
@@ -135,29 +128,41 @@ class CCPluginNEW extends cocos_cli_1.CCPlugin {
 }
 exports.CCPluginNEW = CCPluginNEW;
 class TemplateCreator {
-    constructor(lang, cocos_root, project_name, project_dir, tp_name, tp_dir, project_package, mac_id, ios_id) {
+    constructor(plugin) {
         this.excludes = [];
-        this.lang = lang;
-        this.cocos_root = cocos_root;
-        this.project_name = project_name;
-        this.project_dir = project_dir;
-        this.package_name = project_package;
-        this.mac_bundleid = mac_id;
-        this.ios_bundleid = ios_id;
-        this.tp_name = tp_name;
-        this.tp_dir = tp_dir;
-        if (cocos_cfg.support_templates.indexOf(tp_name) < 0) {
-            console.error(`template name "${tp_name}" is not supported!`);
+        this.plugin = plugin;
+        let args = plugin.args;
+        let template_dir = path.join(plugin.get_templates_root_path(), plugin.selected_template_dir_name);
+        this.lang = args.get_path("language");
+        this.cocos_root = plugin.get_cocos_root();
+        this.project_name = plugin.project_name;
+        this.project_dir = plugin.project_dir;
+        this.package_name = args.get_string("package_name");
+        this.mac_bundleid = args.get_string("mac_bundleid");
+        this.ios_bundleid = args.get_string("ios_bundleid");
+        this.tp_name = args.get_path("template_name");
+        this.tp_dir = template_dir;
+        if (cocos_cfg.support_templates.indexOf(this.tp_name) < 0) {
+            console.error(`template name "${this.tp_name}" is not supported!`);
         }
-        if (!fs.existsSync(path.join(tp_dir, PackageNewConfig))) {
-            console.error(`can not find ${PackageNewConfig} in ${tp_dir}`);
+        if (!fs.existsSync(path.join(this.tp_dir, PackageNewConfig))) {
+            console.error(`can not find ${PackageNewConfig} in ${this.tp_dir}`);
             return;
         }
-        this.template_info = JSON.parse(fs.readFileSync(path.join(tp_dir, PackageNewConfig)).toString("utf8"));
+        this.template_info = JSON.parse(fs.readFileSync(path.join(this.tp_dir, PackageNewConfig)).toString("utf8"));
         if (!("do_default" in this.template_info)) {
             console.error(`can not find "do_default" in ${PackageNewConfig}`);
             return;
         }
+    }
+    do_post_steps() {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.set_orientation();
+            yield this.update_android_gradle_values();
+        });
+    }
+    get_config_path() {
+        return path.join(this.project_dir, cocos_project.CONFIG);
     }
     run() {
         return __awaiter(this, void 0, void 0, function* () {
@@ -175,8 +180,15 @@ class TemplateCreator {
                 // console.log(`other commands ${key}`)
                 yield this.execute(this.template_info[key]);
             }
+            yield this.do_post_steps();
             project_CONFIG.engine_version = this.get_cocos_version();
-            fs.writeFileSync(path.join(this.project_dir, cocos_project.CONFIG), JSON.stringify(project_CONFIG, undefined, 2));
+            let cfg = {};
+            let cfgPath = this.get_config_path();
+            if (fs.existsSync(cfgPath)) {
+                cfg = JSON.parse(fs.readFileSync(cfgPath).toString("utf-8"));
+            }
+            cfg = Object.assign(cfg, project_CONFIG);
+            fs.writeFileSync(cfgPath, JSON.stringify(cfg, undefined, 2));
         });
     }
     get_cocos_version() {
@@ -193,6 +205,155 @@ class TemplateCreator {
             }
         }
         return "unknown";
+    }
+    get_project_pkg_config(platform) {
+        if (!fs.existsSync(this.get_config_path())) {
+            return undefined;
+        }
+        let p = JSON.parse(fs.readFileSync(this.get_config_path()).toString("utf-8"));
+        if (!p.packages) {
+            return undefined;
+        }
+        return p.packages[platform];
+    }
+    set_orientation() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let cfgPath = this.get_config_path();
+            if (fs.existsSync(cfgPath)) {
+                let json = JSON.parse(fs.readFileSync(cfgPath).toString("utf-8"));
+                if (json.ios) {
+                    let cfg = json.ios.orientation;
+                    let infoPlist = path.join(this.project_dir, 'frameworks/runtime-src/proj.ios_mac/ios/Info.plist');
+                    if (fs.existsSync(infoPlist)) {
+                        let orientations = [];
+                        if (cfg.landscapeRight) {
+                            orientations.push('UIInterfaceOrientationLandscapeRight');
+                        }
+                        if (cfg.landscapeLeft) {
+                            orientations.push('UIInterfaceOrientationLandscapeLeft');
+                        }
+                        if (cfg.portrait) {
+                            orientations.push('UIInterfaceOrientationPortrait');
+                        }
+                        if (cfg.upsideDown) {
+                            orientations.push('UIInterfaceOrientationPortraitUpsideDown');
+                        }
+                        let replacement = `\t<key>UISupportedInterfaceOrientations</key>\t<array>${orientations.map(x => `\t\t<string>${x}</string>`)}\t</array>`;
+                        let newlines = [];
+                        let lines = fs.readFileSync(infoPlist).toString("utf-8").split("\n");
+                        let found_key = 0;
+                        let found_values = 0;
+                        for (let i = 0; i < lines.length; i++) {
+                            if (lines[i].indexOf("UISupportedInterfaceOrientations") >= 0) {
+                                found_key += 1;
+                                newlines.push(lines[i]);
+                                i++;
+                                while (i < lines.length && lines[i].indexOf("</array>") < 0) {
+                                    i++;
+                                }
+                                if (lines[i].indexOf("</array>") >= 0) {
+                                    found_values += 1;
+                                }
+                                i++;
+                                newlines.push(replacement);
+                            }
+                            else {
+                                newlines.push(lines[i]);
+                            }
+                        }
+                        if (found_key != 1 || found_values != 1) {
+                            console.error(`error occurs while setting orientations for iOS`);
+                        }
+                        else {
+                            yield afs_1.afs.writeFile(infoPlist, newlines.join("\n"));
+                        }
+                    }
+                    else {
+                        console.error(`file ${infoPlist} not exist!`);
+                    }
+                }
+                if (json.android) {
+                    let cfg = json.android.orientation;
+                    let manifestPath = path.join(this.project_dir, 'frameworks/runtime-src/proj.android-studio/app/AndroidManifest.xml');
+                    if (fs.existsSync(manifestPath)) {
+                        let pattern = /android:screenOrientation=\"[^"]*\"/;
+                        let replaceString = 'android:screenOrientation="unspecified"';
+                        if (cfg.landscapeRight && cfg.landscapeLeft && cfg.portrait && cfg.upsideDown) {
+                            replaceString = 'android:screenOrientation="fullSensor"';
+                        }
+                        else if (cfg.landscapeRight && !cfg.landscapeLeft) {
+                            replaceString = 'android:screenOrientation="landscape"';
+                        }
+                        else if (!cfg.landscapeRight && cfg.landscapeLeft) {
+                            replaceString = 'android:screenOrientation="reverseLandscape"';
+                        }
+                        else if (cfg.landscapeRight && cfg.landscapeLeft) {
+                            replaceString = 'android:screenOrientation="sensorLandscape"';
+                        }
+                        else if (cfg.portrait && !cfg.upsideDown) {
+                            replaceString = 'android:screenOrientation="portrait"';
+                        }
+                        else if (!cfg.portrait && cfg.upsideDown) {
+                            let oriValue = 'reversePortrait';
+                            replaceString = `android:screenOrientation="${oriValue}"`;
+                        }
+                        else if (cfg.portrait && cfg.upsideDown) {
+                            let oriValue = 'sensorPortrait';
+                            replaceString = `android:screenOrientation="${oriValue}"`;
+                        }
+                        let content = yield afs_1.afs.readFile(manifestPath, 'utf8');
+                        content = content.replace(pattern, replaceString);
+                        yield afs_1.afs.writeFile(manifestPath, content);
+                    }
+                    else {
+                        console.error(`file ${manifestPath} not exist!`);
+                    }
+                }
+            }
+            else {
+                console.error(`file ${cfgPath} not found!`);
+            }
+        });
+    }
+    update_android_gradle_values() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let cfg = this.get_project_pkg_config("android");
+            if (!cfg)
+                return;
+            // android-studio gradle.properties
+            let gradlePropertyPath = path.join(this.project_dir, 'frameworks/runtime-src/proj.android-studio/gradle.properties');
+            if (fs.existsSync(gradlePropertyPath)) {
+                let keystorePath = cfg.keystorePath;
+                if (this.plugin.get_current_platform() == "win32") {
+                    keystorePath = cocos_cli_1.cchelper.fix_path(keystorePath);
+                }
+                let apiLevel = cfg.apiLevel;
+                if (!apiLevel) {
+                    apiLevel = 27;
+                }
+                let content = fs.readFileSync(gradlePropertyPath, 'utf-8');
+                content = content.replace(/RELEASE_STORE_FILE=.*/, `RELEASE_STORE_FILE=${keystorePath}`);
+                content = content.replace(/RELEASE_STORE_PASSWORD=.*/, `RELEASE_STORE_PASSWORD=${cfg.keystorePassword}`);
+                content = content.replace(/RELEASE_KEY_ALIAS=.*/, `RELEASE_KEY_ALIAS=${cfg.keystoreAlias}`);
+                content = content.replace(/RELEASE_KEY_PASSWORD=.*/, `RELEASE_KEY_PASSWORD=${cfg.keystoreAliasPassword}`);
+                content = content.replace(/PROP_TARGET_SDK_VERSION=.*/, `PROP_TARGET_SDK_VERSION=${apiLevel}`);
+                content = content.replace(/PROP_COMPILE_SDK_VERSION=.*/, `PROP_COMPILE_SDK_VERSION=${apiLevel}`);
+                let abis = (cfg.appABIs && cfg.appABIs.length > 0) ? cfg.appABIs.join(':') : 'armeabi-v7a';
+                //todo:新的template里面有个注释也是这个字段，所以要加个g
+                content = content.replace(/PROP_APP_ABI=.*/g, `PROP_APP_ABI=${abis}`);
+                fs.writeFileSync(gradlePropertyPath, content);
+                // generate local.properties
+                content = '';
+                content += `ndk.dir=${process.env.NDK_ROOT}\n`;
+                content += `sdk.dir=${process.env.ANDROID_SDK_ROOT}`;
+                //windows 需要使用的这样的格式 e\:\\aa\\bb\\cc
+                if (process.platform === 'win32') {
+                    content = content.replace(/\\/g, '\\\\');
+                    content = content.replace(/:/g, '\\:');
+                }
+                fs.writeFileSync(path.join(path.dirname(gradlePropertyPath), 'local.properties'), content);
+            }
+        });
     }
     execute(cmds) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -211,13 +372,13 @@ class TemplateCreator {
             if (cmds.append_x_engine && this.tp_name != "link") {
                 let common = cocos2dx_files.common;
                 let to = path.join(this.project_dir, cmds.append_x_engine.to);
-                yield cocos_cli_1.cchelper.par_copy_files(20, this.cocos_root, common, to);
+                yield cocos_cli_1.cchelper.parallel_copy_files(20, this.cocos_root, common, to);
                 if (this.lang == "js") {
                     let fileList = cocos2dx_files.js;
-                    yield cocos_cli_1.cchelper.par_copy_files(20, this.cocos_root, fileList, to);
+                    yield cocos_cli_1.cchelper.parallel_copy_files(20, this.cocos_root, fileList, to);
                 }
-                delete cmds.append_x_engine;
             }
+            delete cmds.append_x_engine;
             if (cmds.append_from_template) {
                 let cmd = cmds.append_from_template;
                 // console.log(`append-from-template ${JSON.stringify(cmd)}`);
@@ -229,6 +390,7 @@ class TemplateCreator {
                 delete cmds.append_from_template;
             }
             let replace_files_delay = {};
+            ;
             if (cmds.project_replace_project_name) {
                 let cmd = cmds.project_replace_project_name;
                 cmd.files.forEach(file => {
@@ -289,18 +451,25 @@ class TemplateCreator {
                     let fp = path.join(this.project_dir, p);
                     let list = replace_files_delay[fp] = replace_files_delay[fp] || [];
                     if (this.tp_name == "link") {
-                        console.log(`cocos_x_root ${cocos_x_root} ${f}`);
+                        let v = typeof f.link == "string" ? f.link : cocos_x_root;
+                        if (typeof f === "object" && f.needFix) {
+                            v = cocos_cli_1.cchelper.fix_path(v);
+                        }
                         list.push({
                             reg: cmd.pattern,
-                            content: typeof f.link == "string" ? f.link : cocos_x_root
+                            content: v
                         });
                     }
                     else {
                         // use relative path
                         let rel_path = path.relative(fp, proj_cocos_path);
+                        let v = !!f.default ? f.default : rel_path;
+                        if (typeof f === "object" && f.needFix) {
+                            v = cocos_cli_1.cchelper.fix_path(v);
+                        }
                         list.push({
                             reg: cmd.pattern,
-                            content: !!f.default ? f.default : rel_path
+                            content: v
                         });
                     }
                 }

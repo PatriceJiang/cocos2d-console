@@ -1,3 +1,2 @@
 @echo off
-@python "%~dp0/cocos.py" %*
-
+@node "%~dp0/cocos_cli.js" %*

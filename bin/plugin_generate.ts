@@ -100,7 +100,7 @@ class IOSGenerateCMD extends PlatformGenerateCmd {
         }
 
         if (!(await afs.exists(build_dir))) {
-            cchelper.mkdir_p_sync(build_dir);
+            cchelper.make_directory_recursive(build_dir);
         }
 
         let osx_sysroot = "iphoneos";
@@ -138,7 +138,7 @@ class MacGenerateCMD extends PlatformGenerateCmd {
         }
 
         if (!(await afs.exists(build_dir))) {
-            cchelper.mkdir_p_sync(build_dir);
+            cchelper.make_directory_recursive(build_dir);
         }
 
         await this.plugin.run_cmake(["-S", `${project_src_dir}`, "-GXcode", `-B${build_dir}`, "-DCMAKE_SYSTEM_NAME=Darwin"])
@@ -204,9 +204,9 @@ class Win32GenerateCMD extends PlatformGenerateCmd {
                 available_generators.push(cfg.G);
                 break;
             }
-            await cchelper.rm_r(build_dir);
+            await cchelper.remove_directory_recursive(build_dir);
         }
-        await cchelper.rm_r(test_proj_dir);
+        await cchelper.remove_directory_recursive(test_proj_dir);
 
         let ret: string[] = [];
         if (available_generators.length == 0) {
@@ -231,7 +231,7 @@ class Win32GenerateCMD extends PlatformGenerateCmd {
         }
 
         if (!(await afs.exists(build_dir))) {
-            cchelper.mkdir_p_sync(build_dir);
+            cchelper.make_directory_recursive(build_dir);
         }
 
         let g = this.plugin.get_cmake_generator();
